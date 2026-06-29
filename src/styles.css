@@ -1,0 +1,258 @@
+:root {
+  /* dark theme (default) */
+  --bg: #0f1419;
+  --panel: #1a2230;
+  --ink: #e5e9f0;
+  --accent: #3b82f6;
+  --accent-soft: #1e293b;
+  --danger: #ef4444;
+  --border: #2c3645;
+
+  /* canvas / diagram */
+  --canvas-bg: #131a24;
+  --node-fill: #1e2937;
+  --stroke: #cbd5e1;
+  --grid-line: #243040;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 220px 1fr 240px;
+  height: 100vh;
+}
+
+/* ---- side panels live at the screen edges, never in the gaze travel path ---- */
+.toolbar,
+.inspector {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 12px;
+  overflow-y: auto;
+}
+.inspector {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+
+.toolbar h1 {
+  font-size: 18px;
+  margin: 4px 0 16px;
+}
+
+.group {
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+}
+
+/* big dwell-friendly buttons */
+button {
+  font-size: 15px;
+  padding: 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+button:hover {
+  border-color: var(--accent);
+}
+button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+button.danger {
+  border-color: #f0c5c5;
+  color: var(--danger);
+}
+button.danger.active {
+  background: var(--danger);
+  color: #fff;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+kbd {
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+button.active kbd {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.hint {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #4b5563;
+  background: var(--accent-soft);
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
+  background: var(--canvas-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.canvas-bg {
+  fill: var(--canvas-bg);
+  cursor: crosshair;
+}
+
+/* grid */
+.grid-line {
+  stroke: var(--grid-line);
+  stroke-width: 1;
+}
+
+/* arrowheads */
+.arrow-head {
+  fill: var(--stroke);
+}
+
+/* nodes */
+.node {
+  cursor: pointer;
+}
+.node-fill {
+  fill: var(--node-fill);
+  stroke: var(--stroke);
+  stroke-width: 2;
+}
+.node-inner {
+  stroke: var(--stroke);
+  stroke-width: 2;
+}
+.node-label {
+  font-size: 16px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  fill: var(--ink);
+}
+
+/* edges */
+.edge {
+  cursor: pointer;
+}
+.edge-line {
+  stroke: var(--stroke);
+  stroke-width: 2;
+  fill: none;
+}
+.edge-line.selected {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.edge-hit {
+  stroke: transparent;
+  stroke-width: 16;
+  fill: none;
+}
+.edge-label {
+  font-size: 15px;
+  text-anchor: middle;
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--canvas-bg);
+  stroke-width: 4;
+  stroke-linejoin: round;
+}
+
+/* selection / pending rings (stripped on export) */
+.ring {
+  stroke-width: 2.5;
+}
+.ring-sel {
+  stroke: var(--accent);
+}
+.ring-pending {
+  stroke: #16a34a;
+  stroke-dasharray: 5 4;
+}
+
+.inspector label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.inspector input {
+  font-size: 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.muted {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+@media print {
+  /* print/PDF always uses a clean light palette, like the PNG export */
+  :root {
+    --canvas-bg: #ffffff;
+    --node-fill: #ffffff;
+    --stroke: #1d2433;
+    --ink: #1d2433;
+    --grid-line: #e3e8f0;
+  }
+  .toolbar,
+  .inspector {
+    display: none;
+  }
+  .app {
+    display: block;
+  }
+  .canvas {
+    border: none;
+    box-shadow: none;
+  }
+}
