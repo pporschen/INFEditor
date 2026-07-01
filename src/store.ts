@@ -1,10 +1,16 @@
 import { useReducer } from 'react'
 import type { Doc, DiagNode, Shape } from './types'
-import { boxCells } from './geometry'
 
 export type Action =
-  | { type: 'ADD_NODE'; x: number; y: number; shape: Shape }
-  | { type: 'ADD_BOX'; id: string; ax: number; ay: number; bx: number; by: number }
+  | {
+      type: 'ADD_SHAPE'
+      id: string
+      shape: Shape
+      ax: number
+      ay: number
+      bx: number
+      by: number
+    }
   | { type: 'MOVE_NODE'; id: string; x: number; y: number }
   | { type: 'ADD_EDGE'; from: string; to: string }
   | { type: 'DELETE_NODE'; id: string }
@@ -33,29 +39,17 @@ function occupied(doc: Doc, x: number, y: number, exceptId?: string): boolean {
 
 function docReducer(doc: Doc, a: Action): Doc {
   switch (a.type) {
-    case 'ADD_NODE': {
-      if (occupied(doc, a.x, a.y)) return doc
-      const node: DiagNode = {
-        id: uid(),
-        x: a.x,
-        y: a.y,
-        label: '',
-        shape: a.shape,
-        accepting: false,
-        start: false,
-      }
-      return { ...doc, nodes: [...doc.nodes, node] }
-    }
-    case 'ADD_BOX': {
+    case 'ADD_SHAPE': {
+      // Both states (ellipses) and boxes are drawn from two opposite corners.
       const w = Math.abs(a.bx - a.ax)
       const h = Math.abs(a.by - a.ay)
-      if (w === 0 || h === 0) return doc // degenerate box → ignore
+      if (w === 0 || h === 0) return doc // degenerate → ignore
       const node: DiagNode = {
-        id: a.id, // supplied by caller so it can select + focus the new box
+        id: a.id, // supplied by caller so it can select + focus the new node
         x: (a.ax + a.bx) / 2, // center (may land on a half-cell)
         y: (a.ay + a.by) / 2,
         label: '',
-        shape: 'box',
+        shape: a.shape,
         accepting: false,
         start: false,
         w,
@@ -67,14 +61,13 @@ function docReducer(doc: Doc, a: Action): Doc {
       const node = doc.nodes.find((n) => n.id === a.id)
       if (!node) return doc
       // Anchor moves by the TOP-LEFT corner: the clicked grid point becomes the
-      // node's upper-left. For boxes this keeps their edges on the grid lines;
-      // circles have no corner, so their center lands on the clicked point.
+      // node's upper-left, keeping sized shapes aligned to the grid lines.
+      // Legacy nodes without w/h fall back to centering on the clicked point.
       let cx = a.x
       let cy = a.y
-      if (node.shape === 'box') {
-        const { w, h } = boxCells(node)
-        cx = a.x + w / 2
-        cy = a.y + h / 2
+      if (node.w != null && node.h != null) {
+        cx = a.x + node.w / 2
+        cy = a.y + node.h / 2
       }
       if (occupied(doc, cx, cy, a.id)) return doc
       return {

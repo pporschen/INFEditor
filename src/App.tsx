@@ -63,21 +63,20 @@ export default function App() {
 
   function handleBgClick(gx: number, gy: number) {
     if (mode === 'node') {
-      if (shape === 'circle') {
-        dispatch({ type: 'ADD_NODE', x: gx, y: gy, shape })
-      } else if (pendingCorner === null) {
-        // box: first corner
-        setPendingCorner({ x: gx, y: gy })
+      // Both states and boxes are drawn from two opposite corners.
+      if (pendingCorner === null) {
+        setPendingCorner({ x: gx, y: gy }) // first corner
         setHoverCell({ x: gx, y: gy })
       } else {
-        // box: opposite corner → create, then jump straight to labeling it
+        // opposite corner → create, then jump straight to labeling it
         setPendingCorner(null)
         setHoverCell(null)
         if (pendingCorner.x !== gx && pendingCorner.y !== gy) {
           const id = crypto.randomUUID()
           dispatch({
-            type: 'ADD_BOX',
+            type: 'ADD_SHAPE',
             id,
+            shape,
             ax: pendingCorner.x,
             ay: pendingCorner.y,
             bx: gx,
@@ -96,8 +95,8 @@ export default function App() {
   }
 
   function handleBgMove(gx: number, gy: number) {
-    // only track the cursor while actively drawing a box (keeps re-renders scoped)
-    if (mode === 'node' && shape === 'box' && pendingCorner) {
+    // only track the cursor while actively drawing a shape (keeps re-renders scoped)
+    if (mode === 'node' && pendingCorner) {
       setHoverCell((h) => (h && h.x === gx && h.y === gy ? h : { x: gx, y: gy }))
     }
   }
@@ -229,11 +228,15 @@ export default function App() {
                 setHoverCell(null)
               }}
             >
-              ◯ State
+              ◯ State (2 corners)
             </button>
             <button
               className={shape === 'box' ? 'active' : ''}
-              onClick={() => setShape('box')}
+              onClick={() => {
+                setShape('box')
+                setPendingCorner(null)
+                setHoverCell(null)
+              }}
             >
               ▭ Box (2 corners)
             </button>
@@ -270,13 +273,13 @@ export default function App() {
 
         <div className="hint">
           {mode === 'node' &&
-            shape === 'circle' &&
-            'Look at a grid point and dwell to place a state.'}
-          {mode === 'node' &&
-            shape === 'box' &&
             (pendingCorner
-              ? 'Now dwell on the opposite corner to finish the box.'
-              : 'Dwell on the first corner of the box.')}
+              ? `Now dwell on the opposite corner to finish the ${
+                  shape === 'circle' ? 'state' : 'box'
+                }.`
+              : `Dwell on the first corner of the ${
+                  shape === 'circle' ? 'state' : 'box'
+                }.`)}
           {mode === 'edge' &&
             (pendingFrom
               ? 'Now dwell on the target node (same node = self-loop).'
@@ -296,6 +299,7 @@ export default function App() {
           pendingFrom={pendingFrom}
           pendingCorner={pendingCorner}
           hoverCell={hoverCell}
+          drawShape={shape}
           onBgClick={handleBgClick}
           onBgMove={handleBgMove}
           onNodeClick={handleNodeClick}
@@ -323,22 +327,26 @@ export default function App() {
                 autoFocus
               />
             </label>
-            <button
-              className={selectedNode.accepting ? 'active' : ''}
-              onClick={() =>
-                dispatch({ type: 'TOGGLE_ACCEPTING', id: selectedNode.id })
-              }
-            >
-              Accepting (double circle)
-            </button>
-            <button
-              className={selectedNode.start ? 'active' : ''}
-              onClick={() =>
-                dispatch({ type: 'TOGGLE_START', id: selectedNode.id })
-              }
-            >
-              Start state
-            </button>
+            {selectedNode.shape === 'circle' && (
+              <>
+                <button
+                  className={selectedNode.accepting ? 'active' : ''}
+                  onClick={() =>
+                    dispatch({ type: 'TOGGLE_ACCEPTING', id: selectedNode.id })
+                  }
+                >
+                  Accepting (double circle)
+                </button>
+                <button
+                  className={selectedNode.start ? 'active' : ''}
+                  onClick={() =>
+                    dispatch({ type: 'TOGGLE_START', id: selectedNode.id })
+                  }
+                >
+                  Start state
+                </button>
+              </>
+            )}
           </>
         )}
         {selectedEdge && (

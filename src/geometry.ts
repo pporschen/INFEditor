@@ -20,16 +20,13 @@ export function center(n: DiagNode): Pt {
   return { x: n.x * GRID, y: n.y * GRID }
 }
 
-// Box size in grid cells, with a fallback for boxes saved before two-corner
-// drawing existed.
-export function boxCells(n: DiagNode): { w: number; h: number } {
-  return { w: n.w ?? BW / GRID, h: n.h ?? BH / GRID }
-}
-
-// Half-extents of a box in pixels.
-export function boxHalf(n: DiagNode): { hw: number; hh: number } {
-  const { w, h } = boxCells(n)
-  return { hw: (w * GRID) / 2, hh: (h * GRID) / 2 }
+// Half-extents (in pixels) of a node's bounding box. Sized shapes carry w/h in
+// grid cells; legacy nodes fall back to their old fixed size.
+export function halfExtents(n: DiagNode): { hw: number; hh: number } {
+  if (n.w != null && n.h != null) {
+    return { hw: (n.w * GRID) / 2, hh: (n.h * GRID) / 2 }
+  }
+  return n.shape === 'circle' ? { hw: R, hh: R } : { hw: BW / 2, hh: BH / 2 }
 }
 
 // Point on the node boundary in the direction of (tx, ty), so edges touch the
@@ -42,11 +39,13 @@ export function anchor(n: DiagNode, tx: number, ty: number): Pt {
   dx /= len
   dy /= len
 
+  const { hw, hh } = halfExtents(n)
   if (n.shape === 'circle') {
-    return { x: c.x + dx * R, y: c.y + dy * R }
+    // point where the ray leaves the ellipse
+    const s = 1 / Math.sqrt((dx / hw) ** 2 + (dy / hh) ** 2)
+    return { x: c.x + dx * s, y: c.y + dy * s }
   }
   // box: scale the direction vector until it hits a rectangle edge
-  const { hw, hh } = boxHalf(n)
   const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity
   const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity
   const s = Math.min(sx, sy)
@@ -56,7 +55,7 @@ export function anchor(n: DiagNode, tx: number, ty: number): Pt {
 // Topmost boundary point — used to anchor self-loops.
 export function topAnchor(n: DiagNode): Pt {
   const c = center(n)
-  return { x: c.x, y: c.y - (n.shape === 'circle' ? R : boxHalf(n).hh) }
+  return { x: c.x, y: c.y - halfExtents(n).hh }
 }
 
 export function clamp(v: number, lo: number, hi: number): number {

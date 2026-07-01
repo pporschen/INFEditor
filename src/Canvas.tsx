@@ -1,15 +1,6 @@
 import { forwardRef, useMemo } from 'react'
-import type { Doc, Mode, Selection } from './types'
-import {
-  GRID,
-  W,
-  H,
-  R,
-  center,
-  anchor,
-  topAnchor,
-  boxHalf,
-} from './geometry'
+import type { Doc, Mode, Selection, Shape } from './types'
+import { GRID, W, H, center, anchor, topAnchor, halfExtents } from './geometry'
 
 interface Props {
   doc: Doc
@@ -18,6 +9,7 @@ interface Props {
   pendingFrom: string | null
   pendingCorner: { x: number; y: number } | null
   hoverCell: { x: number; y: number } | null
+  drawShape: Shape
   onBgClick: (gx: number, gy: number) => void
   onBgMove: (gx: number, gy: number) => void
   onNodeClick: (id: string) => void
@@ -32,6 +24,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     pendingFrom,
     pendingCorner,
     hoverCell,
+    drawShape,
     onBgClick,
     onBgMove,
     onNodeClick,
@@ -213,6 +206,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
       <g>
         {doc.nodes.map((n) => {
           const c = center(n)
+          const { hw, hh } = halfExtents(n)
           const isSel = selection?.kind === 'node' && selection.id === n.id
           const isPending = pendingFrom === n.id
           return (
@@ -226,12 +220,19 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
             >
               {n.shape === 'circle' ? (
                 <>
-                  <circle cx={c.x} cy={c.y} r={R} className="node-fill" />
+                  <ellipse
+                    cx={c.x}
+                    cy={c.y}
+                    rx={hw}
+                    ry={hh}
+                    className="node-fill"
+                  />
                   {n.accepting && (
-                    <circle
+                    <ellipse
                       cx={c.x}
                       cy={c.y}
-                      r={R - 5}
+                      rx={hw - 5}
+                      ry={hh - 5}
                       className="node-inner"
                       fill="none"
                     />
@@ -239,10 +240,10 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 </>
               ) : (
                 <rect
-                  x={c.x - boxHalf(n).hw}
-                  y={c.y - boxHalf(n).hh}
-                  width={boxHalf(n).hw * 2}
-                  height={boxHalf(n).hh * 2}
+                  x={c.x - hw}
+                  y={c.y - hh}
+                  width={hw * 2}
+                  height={hh * 2}
                   rx={4}
                   className="node-fill"
                 />
@@ -252,7 +253,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 <circle
                   cx={c.x}
                   cy={c.y}
-                  r={(n.shape === 'circle' ? R : Math.max(boxHalf(n).hw, boxHalf(n).hh)) + 8}
+                  r={Math.max(hw, hh) + 8}
                   className={`ui-only ring ${isPending ? 'ring-pending' : 'ring-sel'}`}
                   fill="none"
                 />
@@ -266,19 +267,28 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
         })}
       </g>
 
-      {/* box-drawing preview (first corner marker + rubber-band rectangle) */}
+      {/* shape-drawing preview (first corner marker + rubber-band shape) */}
       {pendingCorner && (
         <g className="ui-only" pointerEvents="none">
-          {hoverCell && (
-            <rect
-              x={Math.min(pendingCorner.x, hoverCell.x) * GRID}
-              y={Math.min(pendingCorner.y, hoverCell.y) * GRID}
-              width={Math.abs(hoverCell.x - pendingCorner.x) * GRID}
-              height={Math.abs(hoverCell.y - pendingCorner.y) * GRID}
-              rx={4}
-              className="preview-box"
-            />
-          )}
+          {hoverCell &&
+            (drawShape === 'circle' ? (
+              <ellipse
+                cx={((pendingCorner.x + hoverCell.x) / 2) * GRID}
+                cy={((pendingCorner.y + hoverCell.y) / 2) * GRID}
+                rx={(Math.abs(hoverCell.x - pendingCorner.x) * GRID) / 2}
+                ry={(Math.abs(hoverCell.y - pendingCorner.y) * GRID) / 2}
+                className="preview-box"
+              />
+            ) : (
+              <rect
+                x={Math.min(pendingCorner.x, hoverCell.x) * GRID}
+                y={Math.min(pendingCorner.y, hoverCell.y) * GRID}
+                width={Math.abs(hoverCell.x - pendingCorner.x) * GRID}
+                height={Math.abs(hoverCell.y - pendingCorner.y) * GRID}
+                rx={4}
+                className="preview-box"
+              />
+            ))}
           <circle
             cx={pendingCorner.x * GRID}
             cy={pendingCorner.y * GRID}
