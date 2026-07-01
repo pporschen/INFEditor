@@ -1,6 +1,9 @@
 import { forwardRef, useMemo } from 'react'
 import type { Doc, Mode, Selection, Shape } from './types'
-import { GRID, W, H, center, anchor, topAnchor, halfExtents } from './geometry'
+import { GRID, W, H, center, anchor, halfExtents } from './geometry'
+
+const LOOP_BASE = 30 // base bulge distance of a self-loop, in px
+const LOOP_W = 20 // half-width of the self-loop
 
 interface Props {
   doc: Doc
@@ -125,14 +128,26 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           const selected = selection?.kind === 'edge' && selection.id === e.id
 
           if (e.from === e.to) {
-            // self-loop
-            const t = topAnchor(a)
-            const d = `M ${t.x - 10},${t.y} C ${t.x - 36},${t.y - 48} ${
-              t.x + 36
-            },${t.y - 48} ${t.x + 10},${t.y}`
+            // self-loop: a bump pointing in direction `angle`, sized by `curve`
+            const c = center(a)
+            const ang = ((e.angle ?? -90) * Math.PI) / 180 // default: up
+            const ux = Math.cos(ang)
+            const uy = Math.sin(ang)
+            const perpx = -uy
+            const perpy = ux
+            const spread = 0.42 // angular offset of the two attach points (~24°)
+            const p1 = anchor(a, c.x + Math.cos(ang - spread), c.y + Math.sin(ang - spread))
+            const p2 = anchor(a, c.x + Math.cos(ang + spread), c.y + Math.sin(ang + spread))
+            const ext = LOOP_BASE + (e.curve ?? 0) // how far the loop bulges out
+            const c1 = { x: p1.x + ux * ext - perpx * LOOP_W, y: p1.y + uy * ext - perpy * LOOP_W }
+            const c2 = { x: p2.x + ux * ext + perpx * LOOP_W, y: p2.y + uy * ext + perpy * LOOP_W }
+            const d = `M ${p1.x},${p1.y} C ${c1.x},${c1.y} ${c2.x},${c2.y} ${p2.x},${p2.y}`
+            const base = anchor(a, c.x + ux, c.y + uy)
+            const lx = base.x + ux * (ext + 16)
+            const ly = base.y + uy * (ext + 16)
             return (
               <g key={e.id} onClick={() => onEdgeClick(e.id)} className="edge">
-                <path d={d} className="edge-hit" />
+                <path d={d} className="edge-hit" fill="none" />
                 <path
                   d={d}
                   className={`edge-line${selected ? ' selected' : ''}`}
@@ -140,7 +155,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                   fill="none"
                 />
                 {e.label && (
-                  <text x={t.x} y={t.y - 54} className="edge-label">
+                  <text x={lx} y={ly} className="edge-label">
                     {e.label}
                   </text>
                 )}
@@ -150,29 +165,35 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 
           const ca = center(a)
           const cb = center(b)
-          const pa = anchor(a, cb.x, cb.y)
-          const pb = anchor(b, ca.x, ca.y)
-          const mx = (pa.x + pb.x) / 2
-          const my = (pa.y + pb.y) / 2
+          const curve = e.curve ?? 0
+          // control point = midpoint pushed along the perpendicular by `curve`
+          const dx = cb.x - ca.x
+          const dy = cb.y - ca.y
+          const len = Math.hypot(dx, dy) || 1
+          const px = -dy / len
+          const py = dx / len
+          const ctrl = {
+            x: (ca.x + cb.x) / 2 + px * curve,
+            y: (ca.y + cb.y) / 2 + py * curve,
+          }
+          // anchor toward the control point so the arc meets the boundary cleanly
+          const pa = anchor(a, ctrl.x, ctrl.y)
+          const pb = anchor(b, ctrl.x, ctrl.y)
+          const d = `M ${pa.x},${pa.y} Q ${ctrl.x},${ctrl.y} ${pb.x},${pb.y}`
+          // label at the quadratic-bezier midpoint (t = 0.5)
+          const lx = 0.25 * pa.x + 0.5 * ctrl.x + 0.25 * pb.x
+          const ly = 0.25 * pa.y + 0.5 * ctrl.y + 0.25 * pb.y
           return (
             <g key={e.id} onClick={() => onEdgeClick(e.id)} className="edge">
-              <line
-                x1={pa.x}
-                y1={pa.y}
-                x2={pb.x}
-                y2={pb.y}
-                className="edge-hit"
-              />
-              <line
-                x1={pa.x}
-                y1={pa.y}
-                x2={pb.x}
-                y2={pb.y}
+              <path d={d} className="edge-hit" fill="none" />
+              <path
+                d={d}
                 className={`edge-line${selected ? ' selected' : ''}`}
                 markerEnd="url(#arrow)"
+                fill="none"
               />
               {e.label && (
-                <text x={mx} y={my - 8} className="edge-label">
+                <text x={lx} y={ly - 6} className="edge-label">
                   {e.label}
                 </text>
               )}

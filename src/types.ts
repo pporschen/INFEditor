@@ -17,6 +17,8 @@ export interface DiagEdge {
   from: string
   to: string // === from means a self-loop
   label: string
+  curve?: number // normal edges: perpendicular bow in px. self-loops: extra size in px.
+  angle?: number // self-loops only: direction of the loop around the state, in degrees
 }
 
 export interface Doc {

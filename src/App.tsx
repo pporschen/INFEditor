@@ -5,6 +5,11 @@ import { exportPng } from './exportPng'
 import type { Doc, Mode, Selection, Shape } from './types'
 
 const STORAGE_KEY = 'infeditor.doc.v1'
+const CURVE_STEP = 24 // pixels of bow added per button press
+const CURVE_MAX = 168 // clamp so arcs stay reasonable
+const LOOP_SIZE_MIN = -18 // clamp for self-loop extra size (keeps a visible loop)
+const LOOP_SIZE_MAX = 160
+const LOOP_ANGLE_STEP = 30 // degrees the loop rotates per button press
 
 function loadInitial(): Doc {
   try {
@@ -106,8 +111,13 @@ export default function App() {
       if (pendingFrom === null) {
         setPendingFrom(id)
       } else {
-        dispatch({ type: 'ADD_EDGE', from: pendingFrom, to: id })
+        // create the arrow, then open its edit menu (label + curvature)
+        const edgeId = crypto.randomUUID()
+        dispatch({ type: 'ADD_EDGE', id: edgeId, from: pendingFrom, to: id })
         setPendingFrom(null)
+        setMode('select')
+        setSelection({ kind: 'edge', id: edgeId })
+        focusLabelRef.current = true
       }
     } else if (mode === 'select') {
       setSelection({ kind: 'node', id })
@@ -131,6 +141,33 @@ export default function App() {
   function finishEditing() {
     ;(document.activeElement as HTMLElement | null)?.blur()
     setSelection(null)
+  }
+
+  function setEdgeCurve(id: string, curve: number) {
+    dispatch({ type: 'SET_EDGE_CURVE', id, curve })
+  }
+
+  // Nudge an edge's curvature by a step, clamped to a sane range.
+  function bendEdge(id: string, delta: number) {
+    const edge = doc.edges.find((e) => e.id === id)
+    if (!edge) return
+    const next = Math.max(-CURVE_MAX, Math.min(CURVE_MAX, (edge.curve ?? 0) + delta))
+    setEdgeCurve(id, next)
+  }
+
+  // Self-loop size (reuses the edge's `curve` field), clamped so it can't invert.
+  function resizeLoop(id: string, delta: number) {
+    const edge = doc.edges.find((e) => e.id === id)
+    if (!edge) return
+    const next = Math.max(LOOP_SIZE_MIN, Math.min(LOOP_SIZE_MAX, (edge.curve ?? 0) + delta))
+    setEdgeCurve(id, next)
+  }
+
+  // Rotate a self-loop around its state.
+  function rotateLoop(id: string, deltaDeg: number) {
+    const edge = doc.edges.find((e) => e.id === id)
+    if (!edge) return
+    dispatch({ type: 'SET_EDGE_ANGLE', id, angle: (edge.angle ?? -90) + deltaDeg })
   }
 
   // Enter or Escape leaves the label field (Escape also deselects).
@@ -350,21 +387,74 @@ export default function App() {
           </>
         )}
         {selectedEdge && (
-          <label>
-            Transition label
-            <input
-              value={selectedEdge.label}
-              onChange={(e) =>
-                dispatch({
-                  type: 'SET_EDGE_LABEL',
-                  id: selectedEdge.id,
-                  label: e.target.value,
-                })
-              }
-              onKeyDown={handleLabelKey}
-              autoFocus
-            />
-          </label>
+          <>
+            <label>
+              Transition label
+              <input
+                ref={labelInputRef}
+                value={selectedEdge.label}
+                onChange={(e) =>
+                  dispatch({
+                    type: 'SET_EDGE_LABEL',
+                    id: selectedEdge.id,
+                    label: e.target.value,
+                  })
+                }
+                onKeyDown={handleLabelKey}
+                autoFocus
+              />
+            </label>
+            {selectedEdge.from !== selectedEdge.to && (
+              <>
+                <span className="group-title">Curvature</span>
+                <div className="curve-row">
+                  <button
+                    onClick={() => bendEdge(selectedEdge.id, -CURVE_STEP)}
+                    title="Bend one way"
+                  >
+                    ↶
+                  </button>
+                  <button onClick={() => setEdgeCurve(selectedEdge.id, 0)}>
+                    Straight
+                  </button>
+                  <button
+                    onClick={() => bendEdge(selectedEdge.id, CURVE_STEP)}
+                    title="Bend the other way"
+                  >
+                    ↷
+                  </button>
+                </div>
+              </>
+            )}
+            {selectedEdge.from === selectedEdge.to && (
+              <>
+                <span className="group-title">Loop size</span>
+                <div className="curve-row">
+                  <button onClick={() => resizeLoop(selectedEdge.id, -CURVE_STEP)}>
+                    −
+                  </button>
+                  <button onClick={() => resizeLoop(selectedEdge.id, CURVE_STEP)}>
+                    +
+                  </button>
+                </div>
+                <span className="group-title">Loop position</span>
+                <div className="curve-row">
+                  <button
+                    onClick={() => rotateLoop(selectedEdge.id, -LOOP_ANGLE_STEP)}
+                    title="Rotate loop around the state"
+                  >
+                    ↺
+                  </button>
+                  <button
+                    onClick={() => rotateLoop(selectedEdge.id, LOOP_ANGLE_STEP)}
+                    title="Rotate loop around the state"
+                  >
+                    ↻
+                  </button>
+                </div>
+              </>
+            )}
+          </>
         )}
         {selection && (
           <button className="done" onClick={finishEditing}>

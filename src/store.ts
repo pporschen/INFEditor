@@ -12,11 +12,13 @@ export type Action =
       by: number
     }
   | { type: 'MOVE_NODE'; id: string; x: number; y: number }
-  | { type: 'ADD_EDGE'; from: string; to: string }
+  | { type: 'ADD_EDGE'; id: string; from: string; to: string }
   | { type: 'DELETE_NODE'; id: string }
   | { type: 'DELETE_EDGE'; id: string }
   | { type: 'SET_NODE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_LABEL'; id: string; label: string }
+  | { type: 'SET_EDGE_CURVE'; id: string; curve: number }
+  | { type: 'SET_EDGE_ANGLE'; id: string; angle: number }
   | { type: 'TOGGLE_ACCEPTING'; id: string }
   | { type: 'TOGGLE_START'; id: string }
   | { type: 'CLEAR' }
@@ -26,11 +28,6 @@ export type Action =
 interface History {
   past: Doc[]
   present: Doc
-}
-
-function uid(): string {
-  // crypto.randomUUID is available in all modern browsers / exam machines.
-  return crypto.randomUUID()
 }
 
 function occupied(doc: Doc, x: number, y: number, exceptId?: string): boolean {
@@ -78,7 +75,7 @@ function docReducer(doc: Doc, a: Action): Doc {
     case 'ADD_EDGE':
       return {
         ...doc,
-        edges: [...doc.edges, { id: uid(), from: a.from, to: a.to, label: '' }],
+        edges: [...doc.edges, { id: a.id, from: a.from, to: a.to, label: '' }],
       }
     case 'DELETE_NODE':
       return {
@@ -96,6 +93,16 @@ function docReducer(doc: Doc, a: Action): Doc {
       return {
         ...doc,
         edges: doc.edges.map((e) => (e.id === a.id ? { ...e, label: a.label } : e)),
+      }
+    case 'SET_EDGE_CURVE':
+      return {
+        ...doc,
+        edges: doc.edges.map((e) => (e.id === a.id ? { ...e, curve: a.curve } : e)),
+      }
+    case 'SET_EDGE_ANGLE':
+      return {
+        ...doc,
+        edges: doc.edges.map((e) => (e.id === a.id ? { ...e, angle: a.angle } : e)),
       }
     case 'TOGGLE_ACCEPTING':
       return {

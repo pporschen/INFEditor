@@ -233,6 +233,18 @@ button.active kbd {
   stroke-dasharray: 5 4;
 }
 
+.curve-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.curve-row button {
+  flex: 1;
+  justify-content: center;
+  font-size: 18px;
+  padding: 14px 6px;
+}
+
 .inspector label {
   display: flex;
   flex-direction: column;
