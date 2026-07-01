@@ -111,7 +111,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           markerHeight="12"
           refX="9"
           refY="3.5"
-          orient="auto"
+          orient="auto-start-reverse"
           markerUnits="userSpaceOnUse"
         >
           <path d="M0,0 L9,3.5 L0,7 Z" className="arrow-head" />
@@ -177,6 +177,36 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
         onMouseMove={handleBgMove}
       />
 
+      {/* fine 1/3 sub-grid: shown while drawing wires or adjusting a selected one */}
+      {(mode === 'line' || selection?.kind === 'line') && (
+        <g pointerEvents="none">
+          {Array.from({ length: (W / GRID) * 3 + 1 }).map((_, i) =>
+            i % 3 === 0 ? null : (
+              <line
+                key={`mv${i}`}
+                x1={(i * GRID) / 3}
+                y1={0}
+                x2={(i * GRID) / 3}
+                y2={H}
+                className="grid-minor"
+              />
+            ),
+          )}
+          {Array.from({ length: (H / GRID) * 3 + 1 }).map((_, i) =>
+            i % 3 === 0 ? null : (
+              <line
+                key={`mh${i}`}
+                x1={0}
+                y1={(i * GRID) / 3}
+                x2={W}
+                y2={(i * GRID) / 3}
+                className="grid-minor"
+              />
+            ),
+          )}
+        </g>
+      )}
+
       {/* grid lines */}
       <g pointerEvents="none" className="grid">
         {Array.from({ length: W / GRID + 1 }).map((_, i) => (
@@ -220,6 +250,16 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 x2={l.x2 * GRID}
                 y2={l.y2 * GRID}
                 className={`edge-line${selected ? ' selected' : ''}`}
+                markerStart={
+                  l.arrow === 'start' || l.arrow === 'both'
+                    ? 'url(#arrow)'
+                    : undefined
+                }
+                markerEnd={
+                  l.arrow === 'end' || l.arrow === 'both'
+                    ? 'url(#arrow)'
+                    : undefined
+                }
               />
             </g>
           )

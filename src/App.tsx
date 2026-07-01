@@ -3,7 +3,7 @@ import { Canvas } from './Canvas'
 import { useEditor } from './store'
 import { exportPng } from './exportPng'
 import { GATES, GATE_ORDER } from './gates'
-import type { Doc, Mode, RelType, Selection, Shape } from './types'
+import type { Doc, LineArrow, Mode, RelType, Selection, Shape } from './types'
 
 const STORAGE_KEY = 'infeditor.doc.v1'
 const CURVE_STEP = 24 // pixels of bow added per button press
@@ -11,6 +11,7 @@ const CURVE_MAX = 168 // clamp so arcs stay reasonable
 const LOOP_SIZE_MIN = -18 // clamp for self-loop extra size (keeps a visible loop)
 const LOOP_SIZE_MAX = 160
 const LOOP_ANGLE_STEP = 30 // degrees the loop rotates per button press
+const LINE_STEP = 1 / 3 // 1/3 of a grid cell — nudge/resize step for wires
 
 // UML relationship picker. Glyphs mark the end where the marker sits.
 // Direction: draw from the "source" of the arrow to its head — subclass→super
@@ -75,7 +76,11 @@ export default function App() {
     selection?.kind === 'edge'
       ? doc.edges.find((e) => e.id === selection.id) ?? null
       : null
-  const selectedLine = selection?.kind === 'line'
+  const selectedLine =
+    selection?.kind === 'line'
+      ? doc.lines.find((l) => l.id === selection.id) ?? null
+      : null
+  const selectedLineId = selectedLine?.id ?? null
 
   const changeMode = useCallback((m: Mode) => {
     setMode(m)
@@ -125,14 +130,18 @@ export default function App() {
         setPendingCorner(null)
         setHoverCell(null)
         if (pendingCorner.x !== gx || pendingCorner.y !== gy) {
+          // create the wire, then select it so its move/length buttons appear
+          const id = crypto.randomUUID()
           dispatch({
             type: 'ADD_LINE',
-            id: crypto.randomUUID(),
+            id,
             x1: pendingCorner.x,
             y1: pendingCorner.y,
             x2: gx,
             y2: gy,
           })
+          setMode('select')
+          setSelection({ kind: 'line', id })
         }
       }
     } else if (mode === 'select' && selection?.kind === 'node') {
@@ -201,6 +210,18 @@ export default function App() {
 
   function setEdgeRel(id: string, rel: RelType) {
     dispatch({ type: 'SET_EDGE_REL', id, rel })
+  }
+
+  function moveLine(id: string, dx: number, dy: number) {
+    dispatch({ type: 'MOVE_LINE', id, dx, dy })
+  }
+
+  function resizeLine(id: string, delta: number) {
+    dispatch({ type: 'RESIZE_LINE', id, delta })
+  }
+
+  function setLineArrow(id: string, arrow: LineArrow) {
+    dispatch({ type: 'SET_LINE_ARROW', id, arrow })
   }
 
   // Nudge an edge's curvature by a step, clamped to a sane range.
@@ -405,7 +426,7 @@ export default function App() {
           {mode === 'line' &&
             (pendingCorner
               ? 'Now dwell on the end point of the wire.'
-              : 'Dwell on the start point of the wire (place as many as you like).')}
+              : 'Dwell on the start point of the wire. After drawing, use the buttons to nudge it by 1/3 cell.')}
           {mode === 'select' &&
             'Dwell a node to select; dwell an empty cell to move it (boxes anchor by their top-left corner).'}
           {mode === 'delete' && 'Dwell a node, edge, or wire to delete it.'}
@@ -585,8 +606,45 @@ export default function App() {
             )}
           </>
         )}
-        {selectedLine && (
-          <p className="muted">Wire — delete it or draw more in Line mode.</p>
+        {selectedLineId && (
+          <>
+            <span className="group-title">Move (1/3 cell)</span>
+            <div className="dpad">
+              <span />
+              <button onClick={() => moveLine(selectedLineId, 0, -LINE_STEP)}>↑</button>
+              <span />
+              <button onClick={() => moveLine(selectedLineId, -LINE_STEP, 0)}>←</button>
+              <span />
+              <button onClick={() => moveLine(selectedLineId, LINE_STEP, 0)}>→</button>
+              <span />
+              <button onClick={() => moveLine(selectedLineId, 0, LINE_STEP)}>↓</button>
+              <span />
+            </div>
+            <span className="group-title">Length (1/3 cell)</span>
+            <div className="curve-row">
+              <button onClick={() => resizeLine(selectedLineId, -LINE_STEP)}>−</button>
+              <button onClick={() => resizeLine(selectedLineId, LINE_STEP)}>+</button>
+            </div>
+            <span className="group-title">Arrowhead</span>
+            <div className="gate-grid">
+              {(
+                [
+                  { a: 'none', label: 'None' },
+                  { a: 'end', label: 'End →' },
+                  { a: 'start', label: 'Start ←' },
+                  { a: 'both', label: 'Both ↔' },
+                ] as { a: LineArrow; label: string }[]
+              ).map(({ a, label }) => (
+                <button
+                  key={a}
+                  className={(selectedLine?.arrow ?? 'none') === a ? 'active' : ''}
+                  onClick={() => setLineArrow(selectedLineId, a)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>
         )}
         {selection && (
           <button className="done" onClick={finishEditing}>

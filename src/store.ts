@@ -1,5 +1,5 @@
 import { useReducer } from 'react'
-import type { Doc, DiagNode, Shape, RelType, GateType } from './types'
+import type { Doc, DiagNode, Shape, RelType, GateType, LineArrow } from './types'
 
 export type Action =
   | {
@@ -18,6 +18,9 @@ export type Action =
   | { type: 'DELETE_NODE'; id: string }
   | { type: 'DELETE_EDGE'; id: string }
   | { type: 'DELETE_LINE'; id: string }
+  | { type: 'MOVE_LINE'; id: string; dx: number; dy: number }
+  | { type: 'RESIZE_LINE'; id: string; delta: number }
+  | { type: 'SET_LINE_ARROW'; id: string; arrow: LineArrow }
   | { type: 'SET_NODE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_CURVE'; id: string; curve: number }
@@ -110,6 +113,45 @@ function docReducer(doc: Doc, a: Action): Doc {
       return { ...doc, edges: doc.edges.filter((e) => e.id !== a.id) }
     case 'DELETE_LINE':
       return { ...doc, lines: doc.lines.filter((l) => l.id !== a.id) }
+    case 'MOVE_LINE':
+      return {
+        ...doc,
+        lines: doc.lines.map((l) =>
+          l.id === a.id
+            ? {
+                ...l,
+                x1: l.x1 + a.dx,
+                y1: l.y1 + a.dy,
+                x2: l.x2 + a.dx,
+                y2: l.y2 + a.dy,
+              }
+            : l,
+        ),
+      }
+    case 'RESIZE_LINE':
+      return {
+        ...doc,
+        lines: doc.lines.map((l) => {
+          if (l.id !== a.id) return l
+          const dx = l.x2 - l.x1
+          const dy = l.y2 - l.y1
+          const len = Math.hypot(dx, dy) || 1
+          const next = len + a.delta
+          if (next < 0.2) return l // keep a minimum length
+          const ux = dx / len
+          const uy = dy / len
+          return { ...l, x2: l.x1 + ux * next, y2: l.y1 + uy * next }
+        }),
+      }
+    case 'SET_LINE_ARROW':
+      return {
+        ...doc,
+        lines: doc.lines.map((l) =>
+          l.id === a.id
+            ? { ...l, arrow: a.arrow === 'none' ? undefined : a.arrow }
+            : l,
+        ),
+      }
     case 'SET_NODE_LABEL':
       return {
         ...doc,

@@ -43,6 +43,8 @@ export interface DiagEdge {
   rel?: RelType // arrowhead / line style (undefined = 'arrow')
 }
 
+export type LineArrow = 'none' | 'start' | 'end' | 'both'
+
 // A free wire segment between two grid points (not tied to nodes).
 export interface DiagLine {
   id: string
@@ -50,6 +52,7 @@ export interface DiagLine {
   y1: number
   x2: number
   y2: number
+  arrow?: Exclude<LineArrow, 'none'> // arrowhead placement (undefined = none)
 }
 
 export interface Doc {

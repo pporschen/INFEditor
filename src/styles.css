@@ -15,7 +15,7 @@
   --canvas-bg: #131a24;
   --node-fill: #1e2937;
   --stroke: #cbd5e1;
-  --grid-line: #243040;
+  --grid-line: #3a4a63;
 }
 
 * {
@@ -155,6 +155,11 @@ button.active kbd {
   stroke: var(--grid-line);
   stroke-width: 1;
 }
+.grid-minor {
+  stroke: var(--grid-line);
+  stroke-width: 1;
+  stroke-opacity: 0.4;
+}
 
 /* arrowheads */
 .arrow-head {
@@ -284,6 +289,18 @@ button.active kbd {
 }
 button.active .gate-hint {
   color: rgba(255, 255, 255, 0.8);
+}
+
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.dpad button {
+  justify-content: center;
+  font-size: 18px;
+  padding: 12px 0;
 }
 
 .curve-row {
