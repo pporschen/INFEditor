@@ -14,8 +14,10 @@ export type Action =
   | { type: 'ADD_DOT'; id: string; x: number; y: number }
   | { type: 'MOVE_NODE'; id: string; x: number; y: number }
   | { type: 'ADD_EDGE'; id: string; from: string; to: string }
+  | { type: 'ADD_LINE'; id: string; x1: number; y1: number; x2: number; y2: number }
   | { type: 'DELETE_NODE'; id: string }
   | { type: 'DELETE_EDGE'; id: string }
+  | { type: 'DELETE_LINE'; id: string }
   | { type: 'SET_NODE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_CURVE'; id: string; curve: number }
@@ -93,13 +95,21 @@ function docReducer(doc: Doc, a: Action): Doc {
         ...doc,
         edges: [...doc.edges, { id: a.id, from: a.from, to: a.to, label: '' }],
       }
+    case 'ADD_LINE':
+      return {
+        ...doc,
+        lines: [...doc.lines, { id: a.id, x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2 }],
+      }
     case 'DELETE_NODE':
       return {
+        ...doc,
         nodes: doc.nodes.filter((n) => n.id !== a.id),
         edges: doc.edges.filter((e) => e.from !== a.id && e.to !== a.id),
       }
     case 'DELETE_EDGE':
       return { ...doc, edges: doc.edges.filter((e) => e.id !== a.id) }
+    case 'DELETE_LINE':
+      return { ...doc, lines: doc.lines.filter((l) => l.id !== a.id) }
     case 'SET_NODE_LABEL':
       return {
         ...doc,
@@ -147,7 +157,7 @@ function docReducer(doc: Doc, a: Action): Doc {
         nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, start: !n.start } : n)),
       }
     case 'CLEAR':
-      return { nodes: [], edges: [] }
+      return { nodes: [], edges: [], lines: [] }
     default:
       return doc
   }

@@ -43,14 +43,25 @@ export interface DiagEdge {
   rel?: RelType // arrowhead / line style (undefined = 'arrow')
 }
 
+// A free wire segment between two grid points (not tied to nodes).
+export interface DiagLine {
+  id: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
 export interface Doc {
   nodes: DiagNode[]
   edges: DiagEdge[]
+  lines: DiagLine[]
 }
 
-export type Mode = 'select' | 'node' | 'edge' | 'delete'
+export type Mode = 'select' | 'node' | 'edge' | 'line' | 'delete'
 
 export type Selection =
   | { kind: 'node'; id: string }
   | { kind: 'edge'; id: string }
+  | { kind: 'line'; id: string }
   | null

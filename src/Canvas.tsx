@@ -43,6 +43,7 @@ interface Props {
   onBgMove: (gx: number, gy: number) => void
   onNodeClick: (id: string) => void
   onEdgeClick: (id: string) => void
+  onLineClick: (id: string) => void
 }
 
 export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
@@ -58,6 +59,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     onBgMove,
     onNodeClick,
     onEdgeClick,
+    onLineClick,
   },
   ref,
 ) {
@@ -66,6 +68,12 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     for (const n of doc.nodes) m.set(n.id, n)
     return m
   }, [doc.nodes])
+
+  // While placing shapes/dots or drawing wires, let every click fall through to
+  // the grid — otherwise existing nodes/edges/lines would swallow the click and
+  // you couldn't place, e.g., a dot on top of a line intersection.
+  const placing = mode === 'node' || mode === 'line'
+  const hitProps = placing ? { pointerEvents: 'none' as const } : {}
 
   function toCell(e: React.MouseEvent<SVGRectElement>): { gx: number; gy: number } | null {
     const svg = (e.currentTarget.ownerSVGElement ?? null) as SVGSVGElement | null
@@ -193,8 +201,33 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
         ))}
       </g>
 
+      {/* free wire lines (under nodes/edges) */}
+      <g {...hitProps}>
+        {doc.lines.map((l) => {
+          const selected = selection?.kind === 'line' && selection.id === l.id
+          return (
+            <g key={l.id} onClick={() => onLineClick(l.id)} className="edge">
+              <line
+                x1={l.x1 * GRID}
+                y1={l.y1 * GRID}
+                x2={l.x2 * GRID}
+                y2={l.y2 * GRID}
+                className="edge-hit"
+              />
+              <line
+                x1={l.x1 * GRID}
+                y1={l.y1 * GRID}
+                x2={l.x2 * GRID}
+                y2={l.y2 * GRID}
+                className={`edge-line${selected ? ' selected' : ''}`}
+              />
+            </g>
+          )
+        })}
+      </g>
+
       {/* edges */}
-      <g>
+      <g {...hitProps}>
         {doc.edges.map((e) => {
           const a = nodeById.get(e.from)
           const b = nodeById.get(e.to)
@@ -301,7 +334,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
       </g>
 
       {/* nodes */}
-      <g>
+      <g {...hitProps}>
         {doc.nodes.map((n) => {
           const c = center(n)
           const { hw, hh } = halfExtents(n)
@@ -390,10 +423,20 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
         })}
       </g>
 
-      {/* shape-drawing preview (first corner marker + rubber-band shape) */}
+      {/* shape/line-drawing preview (first corner marker + rubber-band) */}
       {pendingCorner && (
         <g className="ui-only" pointerEvents="none">
+          {hoverCell && mode === 'line' && (
+            <line
+              x1={pendingCorner.x * GRID}
+              y1={pendingCorner.y * GRID}
+              x2={hoverCell.x * GRID}
+              y2={hoverCell.y * GRID}
+              className="preview-line"
+            />
+          )}
           {hoverCell &&
+            mode === 'node' &&
             (drawShape === 'circle' ? (
               <ellipse
                 cx={((pendingCorner.x + hoverCell.x) / 2) * GRID}

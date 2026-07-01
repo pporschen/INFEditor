@@ -253,6 +253,11 @@ button.active kbd {
 .preview-corner {
   fill: var(--accent);
 }
+.preview-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
 
 /* selection / pending rings (stripped on export) */
 .ring {

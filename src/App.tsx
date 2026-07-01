@@ -28,11 +28,15 @@ const REL_TYPES: { rel: RelType; label: string }[] = [
 function loadInitial(): Doc {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw) as Doc
+    if (raw) {
+      const d = JSON.parse(raw)
+      // tolerate saves from before a collection existed
+      return { nodes: d.nodes ?? [], edges: d.edges ?? [], lines: d.lines ?? [] }
+    }
   } catch {
     /* ignore corrupt autosave */
   }
-  return { nodes: [], edges: [] }
+  return { nodes: [], edges: [], lines: [] }
 }
 
 export default function App() {
@@ -71,6 +75,7 @@ export default function App() {
     selection?.kind === 'edge'
       ? doc.edges.find((e) => e.id === selection.id) ?? null
       : null
+  const selectedLine = selection?.kind === 'line'
 
   const changeMode = useCallback((m: Mode) => {
     setMode(m)
@@ -111,6 +116,25 @@ export default function App() {
           focusLabelRef.current = true
         }
       }
+    } else if (mode === 'line') {
+      // wires are drawn from two grid points
+      if (pendingCorner === null) {
+        setPendingCorner({ x: gx, y: gy })
+        setHoverCell({ x: gx, y: gy })
+      } else {
+        setPendingCorner(null)
+        setHoverCell(null)
+        if (pendingCorner.x !== gx || pendingCorner.y !== gy) {
+          dispatch({
+            type: 'ADD_LINE',
+            id: crypto.randomUUID(),
+            x1: pendingCorner.x,
+            y1: pendingCorner.y,
+            x2: gx,
+            y2: gy,
+          })
+        }
+      }
     } else if (mode === 'select' && selection?.kind === 'node') {
       dispatch({ type: 'MOVE_NODE', id: selection.id, x: gx, y: gy })
     } else if (mode === 'edge') {
@@ -119,9 +143,18 @@ export default function App() {
   }
 
   function handleBgMove(gx: number, gy: number) {
-    // only track the cursor while actively drawing a shape (keeps re-renders scoped)
-    if (mode === 'node' && pendingCorner) {
+    // only track the cursor while actively drawing a shape/line (keeps re-renders scoped)
+    if ((mode === 'node' || mode === 'line') && pendingCorner) {
       setHoverCell((h) => (h && h.x === gx && h.y === gy ? h : { x: gx, y: gy }))
+    }
+  }
+
+  function handleLineClick(id: string) {
+    if (mode === 'select') {
+      setSelection({ kind: 'line', id })
+    } else if (mode === 'delete') {
+      dispatch({ type: 'DELETE_LINE', id })
+      setSelection(null)
     }
   }
 
@@ -221,6 +254,9 @@ export default function App() {
         case 'c':
           changeMode('edge')
           break
+        case 'l':
+          changeMode('line')
+          break
         case 'd':
           changeMode('delete')
           break
@@ -236,6 +272,8 @@ export default function App() {
             dispatch({ type: 'DELETE_NODE', id: selection.id })
           else if (selection?.kind === 'edge')
             dispatch({ type: 'DELETE_EDGE', id: selection.id })
+          else if (selection?.kind === 'line')
+            dispatch({ type: 'DELETE_LINE', id: selection.id })
           setSelection(null)
           break
       }
@@ -268,6 +306,12 @@ export default function App() {
             onClick={() => changeMode('edge')}
           >
             Connect <kbd>c</kbd>
+          </button>
+          <button
+            className={mode === 'line' ? 'active' : ''}
+            onClick={() => changeMode('line')}
+          >
+            Line / wire <kbd>l</kbd>
           </button>
           <button
             className={mode === 'delete' ? 'active danger' : 'danger'}
@@ -358,9 +402,13 @@ export default function App() {
             (pendingFrom
               ? 'Now dwell on the target node (same node = self-loop).'
               : 'Dwell on the source node.')}
+          {mode === 'line' &&
+            (pendingCorner
+              ? 'Now dwell on the end point of the wire.'
+              : 'Dwell on the start point of the wire (place as many as you like).')}
           {mode === 'select' &&
             'Dwell a node to select; dwell an empty cell to move it (boxes anchor by their top-left corner).'}
-          {mode === 'delete' && 'Dwell a node or edge to delete it.'}
+          {mode === 'delete' && 'Dwell a node, edge, or wire to delete it.'}
         </div>
       </aside>
 
@@ -378,6 +426,7 @@ export default function App() {
           onBgMove={handleBgMove}
           onNodeClick={handleNodeClick}
           onEdgeClick={handleEdgeClick}
+          onLineClick={handleLineClick}
         />
       </main>
 
@@ -535,6 +584,9 @@ export default function App() {
               </>
             )}
           </>
+        )}
+        {selectedLine && (
+          <p className="muted">Wire — delete it or draw more in Line mode.</p>
         )}
         {selection && (
           <button className="done" onClick={finishEditing}>
