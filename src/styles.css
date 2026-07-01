@@ -210,6 +210,10 @@ button.active kbd {
   stroke: var(--stroke);
   stroke-width: 2;
 }
+/* junction dot (filled connection point) */
+.dot-fill {
+  fill: var(--stroke);
+}
 
 /* edges */
 .edge {

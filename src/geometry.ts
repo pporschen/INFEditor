@@ -10,6 +10,7 @@ export const H = ROWS * GRID
 export const R = 20 // circle node radius
 export const BW = 76 // box width
 export const BH = 44 // box height
+export const DOT_R = 5 // junction dot radius (matches the gate negation bubble)
 
 export interface Pt {
   x: number
@@ -23,6 +24,7 @@ export function center(n: DiagNode): Pt {
 // Half-extents (in pixels) of a node's bounding box. Sized shapes carry w/h in
 // grid cells; legacy nodes fall back to their old fixed size.
 export function halfExtents(n: DiagNode): { hw: number; hh: number } {
+  if (n.shape === 'dot') return { hw: DOT_R, hh: DOT_R }
   if (n.w != null && n.h != null) {
     return { hw: (n.w * GRID) / 2, hh: (n.h * GRID) / 2 }
   }
@@ -40,7 +42,7 @@ export function anchor(n: DiagNode, tx: number, ty: number): Pt {
   dy /= len
 
   const { hw, hh } = halfExtents(n)
-  if (n.shape === 'circle') {
+  if (n.shape === 'circle' || n.shape === 'dot') {
     // point where the ray leaves the ellipse
     const s = 1 / Math.sqrt((dx / hw) ** 2 + (dy / hh) ** 2)
     return { x: c.x + dx * s, y: c.y + dy * s }

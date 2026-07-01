@@ -82,7 +82,12 @@ export default function App() {
 
   function handleBgClick(gx: number, gy: number) {
     if (mode === 'node') {
-      // Both states and boxes are drawn from two opposite corners.
+      // Junction dots drop with a single dwell; stay in the mode to place more.
+      if (shape === 'dot') {
+        dispatch({ type: 'ADD_DOT', id: crypto.randomUUID(), x: gx, y: gy })
+        return
+      }
+      // States and boxes are drawn from two opposite corners.
       if (pendingCorner === null) {
         setPendingCorner({ x: gx, y: gy }) // first corner
         setHoverCell({ x: gx, y: gy })
@@ -295,6 +300,16 @@ export default function App() {
             >
               ▭ Box (2 corners)
             </button>
+            <button
+              className={shape === 'dot' ? 'active' : ''}
+              onClick={() => {
+                setShape('dot')
+                setPendingCorner(null)
+                setHoverCell(null)
+              }}
+            >
+              ● Junction dot
+            </button>
           </div>
         )}
 
@@ -328,6 +343,10 @@ export default function App() {
 
         <div className="hint">
           {mode === 'node' &&
+            shape === 'dot' &&
+            'Dwell a grid point to drop a junction dot (place as many as you like).'}
+          {mode === 'node' &&
+            shape !== 'dot' &&
             (pendingCorner
               ? `Now dwell on the opposite corner to finish the ${
                   shape === 'circle' ? 'state' : 'box'
@@ -366,22 +385,27 @@ export default function App() {
         <span className="group-title">Properties</span>
         {selectedNode && (
           <>
-            <label>
-              Label
-              <input
-                ref={labelInputRef}
-                value={selectedNode.label}
-                onChange={(e) =>
-                  dispatch({
-                    type: 'SET_NODE_LABEL',
-                    id: selectedNode.id,
-                    label: e.target.value,
-                  })
-                }
-                onKeyDown={handleLabelKey}
-                autoFocus
-              />
-            </label>
+            {selectedNode.shape !== 'dot' && (
+              <label>
+                Label
+                <input
+                  ref={labelInputRef}
+                  value={selectedNode.label}
+                  onChange={(e) =>
+                    dispatch({
+                      type: 'SET_NODE_LABEL',
+                      id: selectedNode.id,
+                      label: e.target.value,
+                    })
+                  }
+                  onKeyDown={handleLabelKey}
+                  autoFocus
+                />
+              </label>
+            )}
+            {selectedNode.shape === 'dot' && (
+              <p className="muted">Junction dot — move or delete it.</p>
+            )}
             {selectedNode.shape === 'circle' && (
               <>
                 <button

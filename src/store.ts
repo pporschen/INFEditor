@@ -11,6 +11,7 @@ export type Action =
       bx: number
       by: number
     }
+  | { type: 'ADD_DOT'; id: string; x: number; y: number }
   | { type: 'MOVE_NODE'; id: string; x: number; y: number }
   | { type: 'ADD_EDGE'; id: string; from: string; to: string }
   | { type: 'DELETE_NODE'; id: string }
@@ -53,6 +54,19 @@ function docReducer(doc: Doc, a: Action): Doc {
         start: false,
         w,
         h,
+      }
+      return { ...doc, nodes: [...doc.nodes, node] }
+    }
+    case 'ADD_DOT': {
+      if (occupied(doc, a.x, a.y)) return doc
+      const node: DiagNode = {
+        id: a.id,
+        x: a.x,
+        y: a.y,
+        label: '',
+        shape: 'dot',
+        accepting: false,
+        start: false,
       }
       return { ...doc, nodes: [...doc.nodes, node] }
     }

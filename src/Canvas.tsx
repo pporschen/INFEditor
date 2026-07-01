@@ -317,7 +317,9 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
               }}
               className="node"
             >
-              {n.shape === 'circle' ? (
+              {n.shape === 'dot' ? (
+                <circle cx={c.x} cy={c.y} r={hw} className="dot-fill" />
+              ) : n.shape === 'circle' ? (
                 <>
                   <ellipse
                     cx={c.x}
@@ -367,7 +369,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 />
               )}
 
-              {gate ? (
+              {n.shape === 'dot' ? null : gate ? (
                 <>
                   <text x={c.x} y={c.y} className="gate-sym">
                     {gate.sym}

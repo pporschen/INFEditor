@@ -1,4 +1,4 @@
-export type Shape = 'circle' | 'box'
+export type Shape = 'circle' | 'box' | 'dot'
 
 export type GateType =
   | 'and'

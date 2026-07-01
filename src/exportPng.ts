@@ -63,6 +63,7 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
     stroke: LIGHT.stroke,
     'stroke-width': '2',
   })
+  setStyle(clone, '.dot-fill', { fill: LIGHT.stroke })
   setStyle(clone, '.edge-line', { stroke: LIGHT.stroke, 'stroke-width': '2', fill: 'none' })
   setStyle(clone, '.node-label', {
     fill: LIGHT.ink,
