@@ -251,6 +251,21 @@ button.active kbd {
   font-size: 13px;
 }
 
+/* prominent "leave edit mode" button — big dwell target, no keyboard needed */
+button.done {
+  margin-top: 8px;
+  justify-content: center;
+  font-size: 17px;
+  padding: 18px 12px;
+  background: #16a34a;
+  color: #fff;
+  border-color: #16a34a;
+}
+button.done:hover:not(:disabled) {
+  background: #15803d;
+  border-color: #15803d;
+}
+
 @media print {
   /* print/PDF always uses a clean light palette, like the PNG export */
   :root {

@@ -127,6 +127,21 @@ export default function App() {
     }
   }
 
+  // Leave edit mode: blur the label field and deselect. Used by the Done
+  // button so the on-screen keyboard is never required just to exit.
+  function finishEditing() {
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    setSelection(null)
+  }
+
+  // Enter or Escape leaves the label field (Escape also deselects).
+  function handleLabelKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      e.currentTarget.blur()
+      if (e.key === 'Escape') setSelection(null)
+    }
+  }
+
   // keyboard shortcuts (also usable via an on-screen keyboard)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -304,6 +319,7 @@ export default function App() {
                     label: e.target.value,
                   })
                 }
+                onKeyDown={handleLabelKey}
                 autoFocus
               />
             </label>
@@ -337,9 +353,15 @@ export default function App() {
                   label: e.target.value,
                 })
               }
+              onKeyDown={handleLabelKey}
               autoFocus
             />
           </label>
+        )}
+        {selection && (
+          <button className="done" onClick={finishEditing}>
+            ✓ Done
+          </button>
         )}
         {!selection && (
           <p className="muted">
