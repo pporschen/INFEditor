@@ -7,6 +7,9 @@
   --accent-soft: #1e293b;
   --danger: #ef4444;
   --border: #2c3645;
+  --btn: #232d3d;
+  --btn-hover: #2c3a4e;
+  --muted: #8b97a8;
 
   /* canvas / diagram */
   --canvas-bg: #131a24;
@@ -66,7 +69,7 @@ body {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6b7280;
+  color: var(--muted);
 }
 
 /* big dwell-friendly buttons */
@@ -75,7 +78,7 @@ button {
   padding: 14px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--btn);
   color: var(--ink);
   cursor: pointer;
   text-align: left;
@@ -84,7 +87,8 @@ button {
   align-items: center;
   gap: 8px;
 }
-button:hover {
+button:hover:not(:disabled) {
+  background: var(--btn-hover);
   border-color: var(--accent);
 }
 button.active {
@@ -93,12 +97,13 @@ button.active {
   border-color: var(--accent);
 }
 button.danger {
-  border-color: #f0c5c5;
-  color: var(--danger);
+  border-color: #5b2b2b;
+  color: #f87171;
 }
 button.danger.active {
   background: var(--danger);
   color: #fff;
+  border-color: var(--danger);
 }
 button:disabled {
   opacity: 0.4;
@@ -107,7 +112,7 @@ button:disabled {
 
 kbd {
   font-size: 11px;
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   padding: 2px 5px;
 }
@@ -118,7 +123,7 @@ button.active kbd {
 .hint {
   font-size: 13px;
   line-height: 1.4;
-  color: #4b5563;
+  color: #b7c2d4;
   background: var(--accent-soft);
   padding: 10px;
   border-radius: 8px;
@@ -231,7 +236,7 @@ button.active kbd {
   border-radius: 8px;
 }
 .muted {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 13px;
 }
 
