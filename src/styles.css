@@ -210,6 +210,17 @@ button.active kbd {
   stroke-linejoin: round;
 }
 
+/* box-drawing preview */
+.preview-box {
+  fill: rgba(59, 130, 246, 0.12);
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+.preview-corner {
+  fill: var(--accent);
+}
+
 /* selection / pending rings (stripped on export) */
 .ring {
   stroke-width: 2.5;

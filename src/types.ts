@@ -2,12 +2,14 @@ export type Shape = 'circle' | 'box'
 
 export interface DiagNode {
   id: string
-  x: number // grid coordinates (cell index, not pixels)
+  x: number // grid coordinates of the node CENTER (may be a half-cell for boxes)
   y: number
   label: string
   shape: Shape
   accepting: boolean // double-circle for automata accepting states
   start: boolean // draw an incoming "start" arrow
+  w?: number // box width in grid cells (boxes only)
+  h?: number // box height in grid cells (boxes only)
 }
 
 export interface DiagEdge {

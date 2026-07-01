@@ -20,6 +20,18 @@ export function center(n: DiagNode): Pt {
   return { x: n.x * GRID, y: n.y * GRID }
 }
 
+// Box size in grid cells, with a fallback for boxes saved before two-corner
+// drawing existed.
+export function boxCells(n: DiagNode): { w: number; h: number } {
+  return { w: n.w ?? BW / GRID, h: n.h ?? BH / GRID }
+}
+
+// Half-extents of a box in pixels.
+export function boxHalf(n: DiagNode): { hw: number; hh: number } {
+  const { w, h } = boxCells(n)
+  return { hw: (w * GRID) / 2, hh: (h * GRID) / 2 }
+}
+
 // Point on the node boundary in the direction of (tx, ty), so edges touch the
 // outline rather than the center.
 export function anchor(n: DiagNode, tx: number, ty: number): Pt {
@@ -34,8 +46,7 @@ export function anchor(n: DiagNode, tx: number, ty: number): Pt {
     return { x: c.x + dx * R, y: c.y + dy * R }
   }
   // box: scale the direction vector until it hits a rectangle edge
-  const hw = BW / 2
-  const hh = BH / 2
+  const { hw, hh } = boxHalf(n)
   const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity
   const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity
   const s = Math.min(sx, sy)
@@ -45,7 +56,7 @@ export function anchor(n: DiagNode, tx: number, ty: number): Pt {
 // Topmost boundary point — used to anchor self-loops.
 export function topAnchor(n: DiagNode): Pt {
   const c = center(n)
-  return { x: c.x, y: c.y - (n.shape === 'circle' ? R : BH / 2) }
+  return { x: c.x, y: c.y - (n.shape === 'circle' ? R : boxHalf(n).hh) }
 }
 
 export function clamp(v: number, lo: number, hi: number): number {

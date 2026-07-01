@@ -1,8 +1,10 @@
 import { useReducer } from 'react'
 import type { Doc, DiagNode, Shape } from './types'
+import { boxCells } from './geometry'
 
 export type Action =
   | { type: 'ADD_NODE'; x: number; y: number; shape: Shape }
+  | { type: 'ADD_BOX'; id: string; ax: number; ay: number; bx: number; by: number }
   | { type: 'MOVE_NODE'; id: string; x: number; y: number }
   | { type: 'ADD_EDGE'; from: string; to: string }
   | { type: 'DELETE_NODE'; id: string }
@@ -44,11 +46,40 @@ function docReducer(doc: Doc, a: Action): Doc {
       }
       return { ...doc, nodes: [...doc.nodes, node] }
     }
+    case 'ADD_BOX': {
+      const w = Math.abs(a.bx - a.ax)
+      const h = Math.abs(a.by - a.ay)
+      if (w === 0 || h === 0) return doc // degenerate box → ignore
+      const node: DiagNode = {
+        id: a.id, // supplied by caller so it can select + focus the new box
+        x: (a.ax + a.bx) / 2, // center (may land on a half-cell)
+        y: (a.ay + a.by) / 2,
+        label: '',
+        shape: 'box',
+        accepting: false,
+        start: false,
+        w,
+        h,
+      }
+      return { ...doc, nodes: [...doc.nodes, node] }
+    }
     case 'MOVE_NODE': {
-      if (occupied(doc, a.x, a.y, a.id)) return doc
+      const node = doc.nodes.find((n) => n.id === a.id)
+      if (!node) return doc
+      // Anchor moves by the TOP-LEFT corner: the clicked grid point becomes the
+      // node's upper-left. For boxes this keeps their edges on the grid lines;
+      // circles have no corner, so their center lands on the clicked point.
+      let cx = a.x
+      let cy = a.y
+      if (node.shape === 'box') {
+        const { w, h } = boxCells(node)
+        cx = a.x + w / 2
+        cy = a.y + h / 2
+      }
+      if (occupied(doc, cx, cy, a.id)) return doc
       return {
         ...doc,
-        nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, x: a.x, y: a.y } : n)),
+        nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, x: cx, y: cy } : n)),
       }
     }
     case 'ADD_EDGE':

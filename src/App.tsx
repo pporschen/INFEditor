@@ -22,12 +22,27 @@ export default function App() {
   const [shape, setShape] = useState<Shape>('circle')
   const [selection, setSelection] = useState<Selection>(null)
   const [pendingFrom, setPendingFrom] = useState<string | null>(null)
+  const [pendingCorner, setPendingCorner] = useState<{ x: number; y: number } | null>(
+    null,
+  )
+  const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const labelInputRef = useRef<HTMLInputElement>(null)
+  const focusLabelRef = useRef(false) // request to focus the label after box creation
 
   // autosave on every change
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(doc))
   }, [doc])
+
+  // after a box is created we select it and focus its label input for typing
+  useEffect(() => {
+    if (focusLabelRef.current && labelInputRef.current) {
+      labelInputRef.current.focus()
+      labelInputRef.current.select()
+      focusLabelRef.current = false
+    }
+  }, [selection])
 
   const selectedNode =
     selection?.kind === 'node'
@@ -41,16 +56,49 @@ export default function App() {
   const changeMode = useCallback((m: Mode) => {
     setMode(m)
     setPendingFrom(null)
+    setPendingCorner(null)
+    setHoverCell(null)
     setSelection(null)
   }, [])
 
   function handleBgClick(gx: number, gy: number) {
     if (mode === 'node') {
-      dispatch({ type: 'ADD_NODE', x: gx, y: gy, shape })
+      if (shape === 'circle') {
+        dispatch({ type: 'ADD_NODE', x: gx, y: gy, shape })
+      } else if (pendingCorner === null) {
+        // box: first corner
+        setPendingCorner({ x: gx, y: gy })
+        setHoverCell({ x: gx, y: gy })
+      } else {
+        // box: opposite corner → create, then jump straight to labeling it
+        setPendingCorner(null)
+        setHoverCell(null)
+        if (pendingCorner.x !== gx && pendingCorner.y !== gy) {
+          const id = crypto.randomUUID()
+          dispatch({
+            type: 'ADD_BOX',
+            id,
+            ax: pendingCorner.x,
+            ay: pendingCorner.y,
+            bx: gx,
+            by: gy,
+          })
+          setMode('select')
+          setSelection({ kind: 'node', id })
+          focusLabelRef.current = true
+        }
+      }
     } else if (mode === 'select' && selection?.kind === 'node') {
       dispatch({ type: 'MOVE_NODE', id: selection.id, x: gx, y: gy })
     } else if (mode === 'edge') {
       setPendingFrom(null)
+    }
+  }
+
+  function handleBgMove(gx: number, gy: number) {
+    // only track the cursor while actively drawing a box (keeps re-renders scoped)
+    if (mode === 'node' && shape === 'box' && pendingCorner) {
+      setHoverCell((h) => (h && h.x === gx && h.y === gy ? h : { x: gx, y: gy }))
     }
   }
 
@@ -104,6 +152,8 @@ export default function App() {
           break
         case 'Escape':
           setPendingFrom(null)
+          setPendingCorner(null)
+          setHoverCell(null)
           setSelection(null)
           break
         case 'Delete':
@@ -158,7 +208,11 @@ export default function App() {
             <span className="group-title">Shape</span>
             <button
               className={shape === 'circle' ? 'active' : ''}
-              onClick={() => setShape('circle')}
+              onClick={() => {
+                setShape('circle')
+                setPendingCorner(null)
+                setHoverCell(null)
+              }}
             >
               ◯ State
             </button>
@@ -166,7 +220,7 @@ export default function App() {
               className={shape === 'box' ? 'active' : ''}
               onClick={() => setShape('box')}
             >
-              ▭ Box
+              ▭ Box (2 corners)
             </button>
           </div>
         )}
@@ -200,13 +254,20 @@ export default function App() {
         </div>
 
         <div className="hint">
-          {mode === 'node' && 'Look at a grid point and dwell to place a node.'}
+          {mode === 'node' &&
+            shape === 'circle' &&
+            'Look at a grid point and dwell to place a state.'}
+          {mode === 'node' &&
+            shape === 'box' &&
+            (pendingCorner
+              ? 'Now dwell on the opposite corner to finish the box.'
+              : 'Dwell on the first corner of the box.')}
           {mode === 'edge' &&
             (pendingFrom
               ? 'Now dwell on the target node (same node = self-loop).'
               : 'Dwell on the source node.')}
           {mode === 'select' &&
-            'Dwell a node to select; dwell an empty cell to move it here.'}
+            'Dwell a node to select; dwell an empty cell to move it (boxes anchor by their top-left corner).'}
           {mode === 'delete' && 'Dwell a node or edge to delete it.'}
         </div>
       </aside>
@@ -218,7 +279,10 @@ export default function App() {
           mode={mode}
           selection={selection}
           pendingFrom={pendingFrom}
+          pendingCorner={pendingCorner}
+          hoverCell={hoverCell}
           onBgClick={handleBgClick}
+          onBgMove={handleBgMove}
           onNodeClick={handleNodeClick}
           onEdgeClick={handleEdgeClick}
         />
@@ -231,6 +295,7 @@ export default function App() {
             <label>
               Label
               <input
+                ref={labelInputRef}
                 value={selectedNode.label}
                 onChange={(e) =>
                   dispatch({

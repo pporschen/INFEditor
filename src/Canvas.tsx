@@ -5,11 +5,10 @@ import {
   W,
   H,
   R,
-  BW,
-  BH,
   center,
   anchor,
   topAnchor,
+  boxHalf,
 } from './geometry'
 
 interface Props {
@@ -17,13 +16,27 @@ interface Props {
   mode: Mode
   selection: Selection
   pendingFrom: string | null
+  pendingCorner: { x: number; y: number } | null
+  hoverCell: { x: number; y: number } | null
   onBgClick: (gx: number, gy: number) => void
+  onBgMove: (gx: number, gy: number) => void
   onNodeClick: (id: string) => void
   onEdgeClick: (id: string) => void
 }
 
 export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
-  { doc, mode, selection, pendingFrom, onBgClick, onNodeClick, onEdgeClick },
+  {
+    doc,
+    mode,
+    selection,
+    pendingFrom,
+    pendingCorner,
+    hoverCell,
+    onBgClick,
+    onBgMove,
+    onNodeClick,
+    onEdgeClick,
+  },
   ref,
 ) {
   const nodeById = useMemo(() => {
@@ -32,16 +45,26 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     return m
   }, [doc.nodes])
 
-  function handleBg(e: React.MouseEvent<SVGRectElement>) {
+  function toCell(e: React.MouseEvent<SVGRectElement>): { gx: number; gy: number } | null {
     const svg = (e.currentTarget.ownerSVGElement ?? null) as SVGSVGElement | null
-    if (!svg) return
+    if (!svg) return null
     const pt = svg.createSVGPoint()
     pt.x = e.clientX
     pt.y = e.clientY
     const ctm = svg.getScreenCTM()
-    if (!ctm) return
+    if (!ctm) return null
     const p = pt.matrixTransform(ctm.inverse())
-    onBgClick(Math.round(p.x / GRID), Math.round(p.y / GRID))
+    return { gx: Math.round(p.x / GRID), gy: Math.round(p.y / GRID) }
+  }
+
+  function handleBg(e: React.MouseEvent<SVGRectElement>) {
+    const c = toCell(e)
+    if (c) onBgClick(c.gx, c.gy)
+  }
+
+  function handleBgMove(e: React.MouseEvent<SVGRectElement>) {
+    const c = toCell(e)
+    if (c) onBgMove(c.gx, c.gy)
   }
 
   return (
@@ -66,7 +89,15 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
       </defs>
 
       {/* canvas background (export forces this to white in exportPng) */}
-      <rect x={0} y={0} width={W} height={H} className="canvas-bg" onClick={handleBg} />
+      <rect
+        x={0}
+        y={0}
+        width={W}
+        height={H}
+        className="canvas-bg"
+        onClick={handleBg}
+        onMouseMove={handleBgMove}
+      />
 
       {/* grid lines */}
       <g pointerEvents="none" className="grid">
@@ -208,10 +239,10 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 </>
               ) : (
                 <rect
-                  x={c.x - BW / 2}
-                  y={c.y - BH / 2}
-                  width={BW}
-                  height={BH}
+                  x={c.x - boxHalf(n).hw}
+                  y={c.y - boxHalf(n).hh}
+                  width={boxHalf(n).hw * 2}
+                  height={boxHalf(n).hh * 2}
                   rx={4}
                   className="node-fill"
                 />
@@ -221,7 +252,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 <circle
                   cx={c.x}
                   cy={c.y}
-                  r={(n.shape === 'circle' ? R : BW / 2) + 8}
+                  r={(n.shape === 'circle' ? R : Math.max(boxHalf(n).hw, boxHalf(n).hh)) + 8}
                   className={`ui-only ring ${isPending ? 'ring-pending' : 'ring-sel'}`}
                   fill="none"
                 />
@@ -234,6 +265,28 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           )
         })}
       </g>
+
+      {/* box-drawing preview (first corner marker + rubber-band rectangle) */}
+      {pendingCorner && (
+        <g className="ui-only" pointerEvents="none">
+          {hoverCell && (
+            <rect
+              x={Math.min(pendingCorner.x, hoverCell.x) * GRID}
+              y={Math.min(pendingCorner.y, hoverCell.y) * GRID}
+              width={Math.abs(hoverCell.x - pendingCorner.x) * GRID}
+              height={Math.abs(hoverCell.y - pendingCorner.y) * GRID}
+              rx={4}
+              className="preview-box"
+            />
+          )}
+          <circle
+            cx={pendingCorner.x * GRID}
+            cy={pendingCorner.y * GRID}
+            r={5}
+            className="preview-corner"
+          />
+        </g>
+      )}
     </svg>
   )
 })
