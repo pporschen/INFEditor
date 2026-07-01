@@ -1,5 +1,15 @@
 export type Shape = 'circle' | 'box'
 
+export type GateType =
+  | 'and'
+  | 'nand'
+  | 'or'
+  | 'nor'
+  | 'xor'
+  | 'xnor'
+  | 'not'
+  | 'buffer'
+
 export interface DiagNode {
   id: string
   x: number // grid coordinates of the node CENTER (may be a half-cell for boxes)
@@ -10,6 +20,7 @@ export interface DiagNode {
   start: boolean // draw an incoming "start" arrow
   w?: number // box width in grid cells (boxes only)
   h?: number // box height in grid cells (boxes only)
+  gate?: GateType // boxes only: render as an IEC logic-gate symbol
 }
 
 // UML relationship end-types (plus 'arrow' = the default automata arrowhead).

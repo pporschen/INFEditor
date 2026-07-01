@@ -50,6 +50,19 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
     'stroke-width': '2',
   })
   setStyle(clone, '.node-inner', { stroke: LIGHT.stroke, 'stroke-width': '2', fill: 'none' })
+  setStyle(clone, '.gate-sym', {
+    fill: LIGHT.ink,
+    'font-size': '22',
+    'font-weight': '600',
+    'text-anchor': 'middle',
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
+  setStyle(clone, '.gate-bubble', {
+    fill: LIGHT.nodeFill,
+    stroke: LIGHT.stroke,
+    'stroke-width': '2',
+  })
   setStyle(clone, '.edge-line', { stroke: LIGHT.stroke, 'stroke-width': '2', fill: 'none' })
   setStyle(clone, '.node-label', {
     fill: LIGHT.ink,

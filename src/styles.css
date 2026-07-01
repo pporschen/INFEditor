@@ -196,6 +196,21 @@ button.active kbd {
   fill: var(--ink);
 }
 
+/* IEC logic-gate symbol + output negation bubble */
+.gate-sym {
+  font-size: 22px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  fill: var(--ink);
+}
+.gate-bubble {
+  fill: var(--node-fill);
+  stroke: var(--stroke);
+  stroke-width: 2;
+}
+
 /* edges */
 .edge {
   cursor: pointer;
@@ -245,6 +260,21 @@ button.active kbd {
 .ring-pending {
   stroke: #16a34a;
   stroke-dasharray: 5 4;
+}
+
+.gate-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.gate-hint {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+}
+button.active .gate-hint {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .curve-row {

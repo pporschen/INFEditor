@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas } from './Canvas'
 import { useEditor } from './store'
 import { exportPng } from './exportPng'
+import { GATES, GATE_ORDER } from './gates'
 import type { Doc, Mode, RelType, Selection, Shape } from './types'
 
 const STORAGE_KEY = 'infeditor.doc.v1'
@@ -399,6 +400,34 @@ export default function App() {
                 >
                   Start state
                 </button>
+              </>
+            )}
+            {selectedNode.shape === 'box' && (
+              <>
+                <span className="group-title">Logic gate (Schaltnetz)</span>
+                <div className="gate-grid">
+                  <button
+                    className={!selectedNode.gate ? 'active' : ''}
+                    onClick={() =>
+                      dispatch({ type: 'SET_NODE_GATE', id: selectedNode.id, gate: 'none' })
+                    }
+                  >
+                    None
+                  </button>
+                  {GATE_ORDER.map((g) => (
+                    <button
+                      key={g}
+                      className={selectedNode.gate === g ? 'active' : ''}
+                      onClick={() =>
+                        dispatch({ type: 'SET_NODE_GATE', id: selectedNode.id, gate: g })
+                      }
+                      title={GATES[g].name}
+                    >
+                      {GATES[g].name}
+                      <span className="gate-hint">{GATES[g].sym}</span>
+                    </button>
+                  ))}
+                </div>
               </>
             )}
           </>

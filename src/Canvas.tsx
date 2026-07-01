@@ -1,6 +1,7 @@
 import { forwardRef, useMemo } from 'react'
 import type { Doc, DiagEdge, Mode, Selection, Shape } from './types'
 import { GRID, W, H, center, anchor, halfExtents } from './geometry'
+import { GATES } from './gates'
 
 const LOOP_BASE = 30 // base bulge distance of a self-loop, in px
 const LOOP_W = 20 // half-width of the self-loop
@@ -304,6 +305,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
         {doc.nodes.map((n) => {
           const c = center(n)
           const { hw, hh } = halfExtents(n)
+          const gate = n.gate ? GATES[n.gate] : null
           const isSel = selection?.kind === 'node' && selection.id === n.id
           const isPending = pendingFrom === n.id
           return (
@@ -346,6 +348,15 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 />
               )}
 
+              {gate?.neg && (
+                <circle
+                  cx={c.x + hw + 5}
+                  cy={c.y}
+                  r={5}
+                  className="gate-bubble"
+                />
+              )}
+
               {(isSel || isPending) && (
                 <circle
                   cx={c.x}
@@ -356,9 +367,22 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 />
               )}
 
-              <text x={c.x} y={c.y} className="node-label">
-                {n.label}
-              </text>
+              {gate ? (
+                <>
+                  <text x={c.x} y={c.y} className="gate-sym">
+                    {gate.sym}
+                  </text>
+                  {n.label && (
+                    <text x={c.x} y={c.y - hh - 8} className="node-label">
+                      {n.label}
+                    </text>
+                  )}
+                </>
+              ) : (
+                <text x={c.x} y={c.y} className="node-label">
+                  {n.label}
+                </text>
+              )}
             </g>
           )
         })}
