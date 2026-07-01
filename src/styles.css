@@ -160,6 +160,20 @@ button.active kbd {
 .arrow-head {
   fill: var(--stroke);
 }
+/* UML relationship markers */
+.uml-fill {
+  fill: var(--stroke);
+}
+.uml-hollow {
+  fill: var(--canvas-bg);
+  stroke: var(--stroke);
+  stroke-width: 1.5;
+}
+.uml-open {
+  fill: none;
+  stroke: var(--stroke);
+  stroke-width: 1.5;
+}
 
 /* nodes */
 .node {

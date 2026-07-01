@@ -1,5 +1,5 @@
 import { useReducer } from 'react'
-import type { Doc, DiagNode, Shape } from './types'
+import type { Doc, DiagNode, Shape, RelType } from './types'
 
 export type Action =
   | {
@@ -19,6 +19,7 @@ export type Action =
   | { type: 'SET_EDGE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_CURVE'; id: string; curve: number }
   | { type: 'SET_EDGE_ANGLE'; id: string; angle: number }
+  | { type: 'SET_EDGE_REL'; id: string; rel: RelType }
   | { type: 'TOGGLE_ACCEPTING'; id: string }
   | { type: 'TOGGLE_START'; id: string }
   | { type: 'CLEAR' }
@@ -103,6 +104,11 @@ function docReducer(doc: Doc, a: Action): Doc {
       return {
         ...doc,
         edges: doc.edges.map((e) => (e.id === a.id ? { ...e, angle: a.angle } : e)),
+      }
+    case 'SET_EDGE_REL':
+      return {
+        ...doc,
+        edges: doc.edges.map((e) => (e.id === a.id ? { ...e, rel: a.rel } : e)),
       }
     case 'TOGGLE_ACCEPTING':
       return {

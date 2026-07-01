@@ -12,6 +12,16 @@ export interface DiagNode {
   h?: number // box height in grid cells (boxes only)
 }
 
+// UML relationship end-types (plus 'arrow' = the default automata arrowhead).
+export type RelType =
+  | 'arrow'
+  | 'association'
+  | 'dependency'
+  | 'inheritance'
+  | 'realization'
+  | 'aggregation'
+  | 'composition'
+
 export interface DiagEdge {
   id: string
   from: string
@@ -19,6 +29,7 @@ export interface DiagEdge {
   label: string
   curve?: number // normal edges: perpendicular bow in px. self-loops: extra size in px.
   angle?: number // self-loops only: direction of the loop around the state, in degrees
+  rel?: RelType // arrowhead / line style (undefined = 'arrow')
 }
 
 export interface Doc {

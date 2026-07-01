@@ -33,6 +33,17 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
   setStyle(clone, '.canvas-bg', { fill: LIGHT.bg })
   setStyle(clone, '.grid-line', { stroke: LIGHT.grid, 'stroke-width': '1' })
   setStyle(clone, '.arrow-head', { fill: LIGHT.stroke })
+  setStyle(clone, '.uml-fill', { fill: LIGHT.stroke })
+  setStyle(clone, '.uml-hollow', {
+    fill: LIGHT.bg,
+    stroke: LIGHT.stroke,
+    'stroke-width': '1.5',
+  })
+  setStyle(clone, '.uml-open', {
+    fill: 'none',
+    stroke: LIGHT.stroke,
+    'stroke-width': '1.5',
+  })
   setStyle(clone, '.node-fill', {
     fill: LIGHT.nodeFill,
     stroke: LIGHT.stroke,

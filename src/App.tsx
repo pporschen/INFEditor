@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas } from './Canvas'
 import { useEditor } from './store'
 import { exportPng } from './exportPng'
-import type { Doc, Mode, Selection, Shape } from './types'
+import type { Doc, Mode, RelType, Selection, Shape } from './types'
 
 const STORAGE_KEY = 'infeditor.doc.v1'
 const CURVE_STEP = 24 // pixels of bow added per button press
@@ -10,6 +10,19 @@ const CURVE_MAX = 168 // clamp so arcs stay reasonable
 const LOOP_SIZE_MIN = -18 // clamp for self-loop extra size (keeps a visible loop)
 const LOOP_SIZE_MAX = 160
 const LOOP_ANGLE_STEP = 30 // degrees the loop rotates per button press
+
+// UML relationship picker. Glyphs mark the end where the marker sits.
+// Direction: draw from the "source" of the arrow to its head — subclass→super
+// for inheritance, whole→part for composition/aggregation.
+const REL_TYPES: { rel: RelType; label: string }[] = [
+  { rel: 'arrow', label: '→  Directed (automata)' },
+  { rel: 'association', label: '→  Association' },
+  { rel: 'dependency', label: '⇢  Dependency (dashed)' },
+  { rel: 'inheritance', label: '▷  Inheritance (→ super)' },
+  { rel: 'realization', label: '▷  Realization (dashed)' },
+  { rel: 'aggregation', label: '◇  Aggregation (whole→part)' },
+  { rel: 'composition', label: '◆  Composition (whole→part)' },
+]
 
 function loadInitial(): Doc {
   try {
@@ -145,6 +158,10 @@ export default function App() {
 
   function setEdgeCurve(id: string, curve: number) {
     dispatch({ type: 'SET_EDGE_CURVE', id, curve })
+  }
+
+  function setEdgeRel(id: string, rel: RelType) {
+    dispatch({ type: 'SET_EDGE_REL', id, rel })
   }
 
   // Nudge an edge's curvature by a step, clamped to a sane range.
@@ -406,6 +423,16 @@ export default function App() {
             </label>
             {selectedEdge.from !== selectedEdge.to && (
               <>
+                <span className="group-title">Relationship</span>
+                {REL_TYPES.map(({ rel, label }) => (
+                  <button
+                    key={rel}
+                    className={(selectedEdge.rel ?? 'arrow') === rel ? 'active' : ''}
+                    onClick={() => setEdgeRel(selectedEdge.id, rel)}
+                  >
+                    {label}
+                  </button>
+                ))}
                 <span className="group-title">Curvature</span>
                 <div className="curve-row">
                   <button

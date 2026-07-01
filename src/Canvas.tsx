@@ -1,9 +1,34 @@
 import { forwardRef, useMemo } from 'react'
-import type { Doc, Mode, Selection, Shape } from './types'
+import type { Doc, DiagEdge, Mode, Selection, Shape } from './types'
 import { GRID, W, H, center, anchor, halfExtents } from './geometry'
 
 const LOOP_BASE = 30 // base bulge distance of a self-loop, in px
 const LOOP_W = 20 // half-width of the self-loop
+
+// Map a relationship type to its markers and line style.
+// diamonds sit at the SOURCE end; arrows/triangles at the TARGET end.
+function relStyle(rel: DiagEdge['rel']): {
+  start?: string
+  end?: string
+  dashed: boolean
+} {
+  switch (rel) {
+    case 'association':
+      return { end: 'arrowOpen', dashed: false }
+    case 'dependency':
+      return { end: 'arrowOpen', dashed: true }
+    case 'inheritance':
+      return { end: 'triangle', dashed: false }
+    case 'realization':
+      return { end: 'triangle', dashed: true }
+    case 'aggregation':
+      return { start: 'diamondOpen', dashed: false }
+    case 'composition':
+      return { start: 'diamondFilled', dashed: false }
+    default:
+      return { end: 'arrow', dashed: false } // automata default
+  }
+}
 
 interface Props {
   doc: Doc
@@ -81,6 +106,54 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           markerUnits="userSpaceOnUse"
         >
           <path d="M0,0 L9,3.5 L0,7 Z" className="arrow-head" />
+        </marker>
+        {/* UML: open arrow (association / dependency) */}
+        <marker
+          id="arrowOpen"
+          markerWidth="14"
+          markerHeight="12"
+          refX="9"
+          refY="4"
+          orient="auto"
+          markerUnits="userSpaceOnUse"
+        >
+          <path d="M0,0 L9,4 L0,8" className="uml-open" />
+        </marker>
+        {/* UML: hollow triangle (inheritance / realization), at target end */}
+        <marker
+          id="triangle"
+          markerWidth="16"
+          markerHeight="14"
+          refX="12"
+          refY="6"
+          orient="auto"
+          markerUnits="userSpaceOnUse"
+        >
+          <path d="M0,0 L12,6 L0,12 Z" className="uml-hollow" />
+        </marker>
+        {/* UML: filled diamond (composition), at source end */}
+        <marker
+          id="diamondFilled"
+          markerWidth="20"
+          markerHeight="12"
+          refX="0"
+          refY="5"
+          orient="auto"
+          markerUnits="userSpaceOnUse"
+        >
+          <path d="M0,5 L9,0 L18,5 L9,10 Z" className="uml-fill" />
+        </marker>
+        {/* UML: hollow diamond (aggregation), at source end */}
+        <marker
+          id="diamondOpen"
+          markerWidth="20"
+          markerHeight="12"
+          refX="0"
+          refY="5"
+          orient="auto"
+          markerUnits="userSpaceOnUse"
+        >
+          <path d="M0,5 L9,0 L18,5 L9,10 Z" className="uml-hollow" />
         </marker>
       </defs>
 
@@ -183,13 +256,16 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           // label at the quadratic-bezier midpoint (t = 0.5)
           const lx = 0.25 * pa.x + 0.5 * ctrl.x + 0.25 * pb.x
           const ly = 0.25 * pa.y + 0.5 * ctrl.y + 0.25 * pb.y
+          const rs = relStyle(e.rel)
           return (
             <g key={e.id} onClick={() => onEdgeClick(e.id)} className="edge">
               <path d={d} className="edge-hit" fill="none" />
               <path
                 d={d}
                 className={`edge-line${selected ? ' selected' : ''}`}
-                markerEnd="url(#arrow)"
+                markerStart={rs.start ? `url(#${rs.start})` : undefined}
+                markerEnd={rs.end ? `url(#${rs.end})` : undefined}
+                strokeDasharray={rs.dashed ? '7 5' : undefined}
                 fill="none"
               />
               {e.label && (
