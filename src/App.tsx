@@ -63,9 +63,11 @@ export default function App() {
   )
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null)
   const [view, setView] = useState<View>({ x: 0, y: 0, w: W, h: H })
+  const [labelScale, setLabelScale] = useState(1.4)
   const svgRef = useRef<SVGSVGElement>(null)
   const labelInputRef = useRef<HTMLInputElement>(null)
   const focusLabelRef = useRef(false) // request to focus the label after box creation
+  const returnModeRef = useRef<Mode | null>(null) // creation mode to resume after Done
 
   // autosave on every change
   useEffect(() => {
@@ -96,6 +98,7 @@ export default function App() {
   const selectedLineId = selectedLine?.id ?? null
 
   const changeMode = useCallback((m: Mode) => {
+    returnModeRef.current = null // explicit mode switch cancels any resume
     setMode(m)
     setPendingFrom(null)
     setPendingCorner(null)
@@ -147,6 +150,7 @@ export default function App() {
             bx: gx,
             by: gy,
           })
+          returnModeRef.current = 'node'
           setMode('select')
           setSelection({ kind: 'node', id })
           focusLabelRef.current = true
@@ -171,6 +175,7 @@ export default function App() {
             x2: gx,
             y2: gy,
           })
+          returnModeRef.current = 'line'
           setMode('select')
           setSelection({ kind: 'line', id })
         }
@@ -191,6 +196,7 @@ export default function App() {
 
   function handleLineClick(id: string) {
     if (mode === 'select') {
+      returnModeRef.current = null
       setSelection({ kind: 'line', id })
     } else if (mode === 'delete') {
       dispatch({ type: 'DELETE_LINE', id })
@@ -207,11 +213,13 @@ export default function App() {
         const edgeId = crypto.randomUUID()
         dispatch({ type: 'ADD_EDGE', id: edgeId, from: pendingFrom, to: id })
         setPendingFrom(null)
+        returnModeRef.current = 'edge'
         setMode('select')
         setSelection({ kind: 'edge', id: edgeId })
         focusLabelRef.current = true
       }
     } else if (mode === 'select') {
+      returnModeRef.current = null // manual selection — Done goes back to neutral
       setSelection({ kind: 'node', id })
     } else if (mode === 'delete') {
       dispatch({ type: 'DELETE_NODE', id })
@@ -221,6 +229,7 @@ export default function App() {
 
   function handleEdgeClick(id: string) {
     if (mode === 'select') {
+      returnModeRef.current = null
       setSelection({ kind: 'edge', id })
     } else if (mode === 'delete') {
       dispatch({ type: 'DELETE_EDGE', id })
@@ -233,6 +242,11 @@ export default function App() {
   function finishEditing() {
     ;(document.activeElement as HTMLElement | null)?.blur()
     setSelection(null)
+    // If this item was just created, resume its creation mode so the user can
+    // keep making more of the same; otherwise stay in the current (Select) mode.
+    const resume = returnModeRef.current
+    returnModeRef.current = null
+    if (resume) setMode(resume)
   }
 
   function setEdgeCurve(id: string, curve: number) {
@@ -345,90 +359,96 @@ export default function App() {
 
         <div className="group">
           <span className="group-title">Mode</span>
-          <button
-            className={mode === 'select' ? 'active' : ''}
-            onClick={() => changeMode('select')}
-          >
-            Select / Move <kbd>s</kbd>
-          </button>
-          <button
-            className={mode === 'node' ? 'active' : ''}
-            onClick={() => changeMode('node')}
-          >
-            Place node <kbd>p</kbd>
-          </button>
-          <button
-            className={mode === 'edge' ? 'active' : ''}
-            onClick={() => changeMode('edge')}
-          >
-            Connect <kbd>c</kbd>
-          </button>
-          <button
-            className={mode === 'line' ? 'active' : ''}
-            onClick={() => changeMode('line')}
-          >
-            Line / wire <kbd>l</kbd>
-          </button>
-          <button
-            className={mode === 'delete' ? 'active danger' : 'danger'}
-            onClick={() => changeMode('delete')}
-          >
-            Delete <kbd>d</kbd>
-          </button>
+          <div className="btn-grid">
+            <button
+              className={mode === 'select' ? 'active' : ''}
+              onClick={() => changeMode('select')}
+            >
+              Select <kbd>s</kbd>
+            </button>
+            <button
+              className={mode === 'node' ? 'active' : ''}
+              onClick={() => changeMode('node')}
+            >
+              Node <kbd>p</kbd>
+            </button>
+            <button
+              className={mode === 'edge' ? 'active' : ''}
+              onClick={() => changeMode('edge')}
+            >
+              Connect <kbd>c</kbd>
+            </button>
+            <button
+              className={mode === 'line' ? 'active' : ''}
+              onClick={() => changeMode('line')}
+            >
+              Line <kbd>l</kbd>
+            </button>
+            <button
+              className={mode === 'delete' ? 'active danger' : 'danger'}
+              onClick={() => changeMode('delete')}
+            >
+              Delete <kbd>d</kbd>
+            </button>
+          </div>
         </div>
 
         {mode === 'node' && (
           <div className="group">
             <span className="group-title">Shape</span>
-            <button
-              className={shape === 'circle' ? 'active' : ''}
-              onClick={() => {
-                setShape('circle')
-                setPendingCorner(null)
-                setHoverCell(null)
-              }}
-            >
-              ◯ State (2 corners)
-            </button>
-            <button
-              className={shape === 'box' ? 'active' : ''}
-              onClick={() => {
-                setShape('box')
-                setPendingCorner(null)
-                setHoverCell(null)
-              }}
-            >
-              ▭ Box (2 corners)
-            </button>
-            <button
-              className={shape === 'dot' ? 'active' : ''}
-              onClick={() => {
-                setShape('dot')
-                setPendingCorner(null)
-                setHoverCell(null)
-              }}
-            >
-              ● Junction dot
-            </button>
+            <div className="btn-grid">
+              <button
+                className={shape === 'circle' ? 'active' : ''}
+                onClick={() => {
+                  setShape('circle')
+                  setPendingCorner(null)
+                  setHoverCell(null)
+                }}
+              >
+                ◯ State
+              </button>
+              <button
+                className={shape === 'box' ? 'active' : ''}
+                onClick={() => {
+                  setShape('box')
+                  setPendingCorner(null)
+                  setHoverCell(null)
+                }}
+              >
+                ▭ Box
+              </button>
+              <button
+                className={shape === 'dot' ? 'active' : ''}
+                onClick={() => {
+                  setShape('dot')
+                  setPendingCorner(null)
+                  setHoverCell(null)
+                }}
+              >
+                ● Dot
+              </button>
+            </div>
           </div>
         )}
 
         <div className="group">
           <span className="group-title">Edit</span>
-          <button disabled={!canUndo} onClick={() => dispatch({ type: 'UNDO' })}>
-            Undo <kbd>Ctrl+Z</kbd>
-          </button>
-          <button
-            className="danger"
-            onClick={() => {
-              if (confirm('Clear the whole diagram?')) {
-                dispatch({ type: 'CLEAR' })
-                setSelection(null)
-              }
-            }}
-          >
-            Clear all
-          </button>
+          <div className="btn-grid">
+            <button disabled={!canUndo} onClick={() => dispatch({ type: 'UNDO' })}>
+              Undo <kbd>⌃Z</kbd>
+            </button>
+            <button
+              className="danger"
+              onClick={() => {
+                if (confirm('Clear the whole diagram?')) {
+                  dispatch({ type: 'CLEAR' })
+                  setSelection(null)
+                }
+              }}
+            >
+              Clear
+            </button>
+          </div>
         </div>
 
         <div className="group">
@@ -451,13 +471,31 @@ export default function App() {
         </div>
 
         <div className="group">
+          <span className="group-title">Label size</span>
+          <div className="curve-row">
+            <button
+              onClick={() => setLabelScale((s) => Math.max(0.6, s - 0.2))}
+              title="Smaller labels"
+            >
+              A−
+            </button>
+            <button
+              onClick={() => setLabelScale((s) => Math.min(4, s + 0.2))}
+              title="Larger labels"
+            >
+              A＋
+            </button>
+          </div>
+        </div>
+
+        <div className="group">
           <span className="group-title">Export</span>
-          <button
-            onClick={() => svgRef.current && exportPng(svgRef.current)}
-          >
-            Download PNG
-          </button>
-          <button onClick={() => window.print()}>Print → PDF</button>
+          <div className="btn-grid">
+            <button onClick={() => svgRef.current && exportPng(svgRef.current)}>
+              PNG
+            </button>
+            <button onClick={() => window.print()}>PDF</button>
+          </div>
         </div>
 
         <div className="hint">
@@ -498,6 +536,7 @@ export default function App() {
           hoverCell={hoverCell}
           drawShape={shape}
           view={view}
+          labelScale={labelScale}
           onBgClick={handleBgClick}
           onBgMove={handleBgMove}
           onNodeClick={handleNodeClick}

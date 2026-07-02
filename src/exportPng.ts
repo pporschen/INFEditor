@@ -38,6 +38,9 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
     ? { x: bb.x - P, y: bb.y - P, w: bb.width + 2 * P, h: bb.height + 2 * P }
     : { x: vb.x, y: vb.y, w: vb.width, h: vb.height }
 
+  // current label scale set on the live svg (CSS var); bake it into font sizes
+  const ls = parseFloat(getComputedStyle(svg).getPropertyValue('--label-scale')) || 1
+
   const clone = svg.cloneNode(true) as SVGSVGElement
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
   clone.setAttribute('viewBox', `${box.x} ${box.y} ${box.w} ${box.h}`)
@@ -78,7 +81,7 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
   setStyle(clone, '.node-inner', { stroke: LIGHT.stroke, 'stroke-width': '2', fill: 'none' })
   setStyle(clone, '.gate-sym', {
     fill: LIGHT.ink,
-    'font-size': '22',
+    'font-size': String(22 * ls),
     'font-weight': '600',
     'text-anchor': 'middle',
     'dominant-baseline': 'central',
@@ -93,14 +96,14 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
   setStyle(clone, '.edge-line', { stroke: LIGHT.stroke, 'stroke-width': '2', fill: 'none' })
   setStyle(clone, '.node-label', {
     fill: LIGHT.ink,
-    'font-size': '16',
+    'font-size': String(16 * ls),
     'text-anchor': 'middle',
     'dominant-baseline': 'central',
     'font-family': 'sans-serif',
   })
   setStyle(clone, '.edge-label', {
     fill: LIGHT.ink,
-    'font-size': '15',
+    'font-size': String(15 * ls),
     'text-anchor': 'middle',
     'paint-order': 'stroke',
     stroke: LIGHT.bg,

@@ -1,4 +1,4 @@
-import { forwardRef, useMemo } from 'react'
+import { forwardRef, useMemo, type CSSProperties } from 'react'
 import type { Doc, DiagEdge, Mode, Selection, Shape } from './types'
 import { GRID, center, anchor, halfExtents } from './geometry'
 import { GATES } from './gates'
@@ -47,6 +47,7 @@ interface Props {
   hoverCell: { x: number; y: number } | null
   drawShape: Shape
   view: View
+  labelScale: number
   onBgClick: (gx: number, gy: number) => void
   onBgMove: (gx: number, gy: number) => void
   onNodeClick: (id: string) => void
@@ -64,6 +65,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     hoverCell,
     drawShape,
     view,
+    labelScale,
     onBgClick,
     onBgMove,
     onNodeClick,
@@ -125,6 +127,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
       className={`canvas mode-${mode}`}
       viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
       preserveAspectRatio="xMidYMid meet"
+      style={{ '--label-scale': labelScale } as CSSProperties}
     >
       <defs>
         <marker
