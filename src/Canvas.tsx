@@ -199,11 +199,11 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
         onMouseMove={handleBgMove}
       />
 
-      {/* fine 1/3 sub-grid: shown while drawing wires or adjusting a selected one */}
+      {/* fine 1/4 sub-grid: shown while drawing wires or adjusting a selected one */}
       {showSubGrid && (
         <g pointerEvents="none">
-          {gridLines(GRID / 3).xs.map((x, i) =>
-            Math.round(x / (GRID / 3)) % 3 === 0 ? null : (
+          {gridLines(GRID / 4).xs.map((x, i) =>
+            Math.round(x / (GRID / 4)) % 4 === 0 ? null : (
               <line
                 key={`mv${i}`}
                 x1={x}
@@ -214,8 +214,8 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
               />
             ),
           )}
-          {gridLines(GRID / 3).ys.map((y, i) =>
-            Math.round(y / (GRID / 3)) % 3 === 0 ? null : (
+          {gridLines(GRID / 4).ys.map((y, i) =>
+            Math.round(y / (GRID / 4)) % 4 === 0 ? null : (
               <line
                 key={`mh${i}`}
                 x1={view.x}

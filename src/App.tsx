@@ -21,7 +21,7 @@ const CURVE_MAX = 168 // clamp so arcs stay reasonable
 const LOOP_SIZE_MIN = -18 // clamp for self-loop extra size (keeps a visible loop)
 const LOOP_SIZE_MAX = 160
 const LOOP_ANGLE_STEP = 30 // degrees the loop rotates per button press
-const LINE_STEP = 1 / 3 // 1/3 of a grid cell — nudge/resize step for wires
+const LINE_STEP = 1 / 4 // 1/4 of a grid cell — nudge/resize step for wires
 const ZOOM_MIN = W * 0.25 // most zoomed-in (smallest viewBox)
 const ZOOM_MAX = W * 8 // most zoomed-out (largest viewBox)
 
@@ -480,7 +480,7 @@ export default function App() {
           {mode === 'line' &&
             (pendingCorner
               ? 'Now dwell on the end point of the wire.'
-              : 'Dwell on the start point of the wire. After drawing, use the buttons to nudge it by 1/3 cell.')}
+              : 'Dwell on the start point of the wire. After drawing, use the buttons to nudge it by 1/4 cell.')}
           {mode === 'select' &&
             'Dwell a node to select; dwell an empty cell to move it (boxes anchor by their top-left corner).'}
           {mode === 'delete' && 'Dwell a node, edge, or wire to delete it.'}
@@ -689,7 +689,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <span className="group-title">Move (1/3 cell)</span>
+            <span className="group-title">Move (1/4 cell)</span>
             <div className="dpad">
               <span />
               <button onClick={() => moveLine(selectedLineId, 0, -LINE_STEP)}>↑</button>
@@ -701,7 +701,7 @@ export default function App() {
               <button onClick={() => moveLine(selectedLineId, 0, LINE_STEP)}>↓</button>
               <span />
             </div>
-            <span className="group-title">Length (1/3 cell)</span>
+            <span className="group-title">Length (1/4 cell)</span>
             <div className="curve-row">
               <button onClick={() => resizeLine(selectedLineId, -LINE_STEP)}>−</button>
               <button onClick={() => resizeLine(selectedLineId, LINE_STEP)}>+</button>
