@@ -22,16 +22,42 @@ function setStyle(root: SVGSVGElement, selector: string, attrs: Record<string, s
 }
 
 export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
+  // measure the actual content (independent of the current pan/zoom) so the
+  // export captures everything, not just what's on screen.
+  const P = 24 // padding around the content
+  const contentEl = svg.querySelector('#content') as SVGGraphicsElement | null
+  let bb: { x: number; y: number; width: number; height: number } | null = null
+  try {
+    const b = contentEl?.getBBox()
+    if (b && b.width > 0 && b.height > 0) bb = b
+  } catch {
+    /* getBBox can throw if nothing is rendered */
+  }
+  const vb = svg.viewBox.baseVal
+  const box = bb
+    ? { x: bb.x - P, y: bb.y - P, w: bb.width + 2 * P, h: bb.height + 2 * P }
+    : { x: vb.x, y: vb.y, w: vb.width, h: vb.height }
+
   const clone = svg.cloneNode(true) as SVGSVGElement
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+  clone.setAttribute('viewBox', `${box.x} ${box.y} ${box.w} ${box.h}`)
 
-  // drop editor-only decorations
+  // drop editor-only decorations and the grid (cleaner output)
   clone.querySelectorAll('.ui-only').forEach((el) => el.remove())
+  clone.querySelectorAll('.grid-line, .grid-minor').forEach((el) => el.remove())
   clone.querySelectorAll('.selected').forEach((el) => el.classList.remove('selected'))
+
+  // make the white background cover the exported region
+  const bg = clone.querySelector('.canvas-bg')
+  if (bg) {
+    bg.setAttribute('x', String(box.x))
+    bg.setAttribute('y', String(box.y))
+    bg.setAttribute('width', String(box.w))
+    bg.setAttribute('height', String(box.h))
+  }
 
   // bake the light palette onto the elements
   setStyle(clone, '.canvas-bg', { fill: LIGHT.bg })
-  setStyle(clone, '.grid-line', { stroke: LIGHT.grid, 'stroke-width': '1' })
   setStyle(clone, '.arrow-head', { fill: LIGHT.stroke })
   setStyle(clone, '.uml-fill', { fill: LIGHT.stroke })
   setStyle(clone, '.uml-hollow', {
@@ -90,10 +116,9 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
   const img = new Image()
   img.onload = () => {
     const scale = 2 // crisp 2x raster
-    const vb = svg.viewBox.baseVal
     const canvas = document.createElement('canvas')
-    canvas.width = vb.width * scale
-    canvas.height = vb.height * scale
+    canvas.width = box.w * scale
+    canvas.height = box.h * scale
     const ctx = canvas.getContext('2d')!
     ctx.scale(scale, scale)
     ctx.drawImage(img, 0, 0)

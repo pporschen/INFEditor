@@ -44,6 +44,7 @@ export interface DiagEdge {
 }
 
 export type LineArrow = 'none' | 'start' | 'end' | 'both'
+export type LabelPos = 'start' | 'middle' | 'end'
 
 // A free wire segment between two grid points (not tied to nodes).
 export interface DiagLine {
@@ -53,6 +54,8 @@ export interface DiagLine {
   x2: number
   y2: number
   arrow?: Exclude<LineArrow, 'none'> // arrowhead placement (undefined = none)
+  label?: string
+  labelPos?: LabelPos // where the label sits along the wire (default 'middle')
 }
 
 export interface Doc {

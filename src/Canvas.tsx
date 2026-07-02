@@ -1,6 +1,6 @@
 import { forwardRef, useMemo } from 'react'
 import type { Doc, DiagEdge, Mode, Selection, Shape } from './types'
-import { GRID, W, H, center, anchor, halfExtents } from './geometry'
+import { GRID, center, anchor, halfExtents } from './geometry'
 import { GATES } from './gates'
 
 const LOOP_BASE = 30 // base bulge distance of a self-loop, in px
@@ -31,6 +31,13 @@ function relStyle(rel: DiagEdge['rel']): {
   }
 }
 
+export interface View {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 interface Props {
   doc: Doc
   mode: Mode
@@ -39,6 +46,7 @@ interface Props {
   pendingCorner: { x: number; y: number } | null
   hoverCell: { x: number; y: number } | null
   drawShape: Shape
+  view: View
   onBgClick: (gx: number, gy: number) => void
   onBgMove: (gx: number, gy: number) => void
   onNodeClick: (id: string) => void
@@ -55,6 +63,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     pendingCorner,
     hoverCell,
     drawShape,
+    view,
     onBgClick,
     onBgMove,
     onNodeClick,
@@ -74,6 +83,19 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
   // you couldn't place, e.g., a dot on top of a line intersection.
   const placing = mode === 'node' || mode === 'line'
   const hitProps = placing ? { pointerEvents: 'none' as const } : {}
+
+  // grid line positions covering the visible view (world coordinates)
+  const gridLines = (step: number) => {
+    const xs: number[] = []
+    const ys: number[] = []
+    for (let x = Math.floor(view.x / step) * step; x <= view.x + view.w; x += step)
+      xs.push(x)
+    for (let y = Math.floor(view.y / step) * step; y <= view.y + view.h; y += step)
+      ys.push(y)
+    return { xs, ys }
+  }
+  const major = gridLines(GRID)
+  const showSubGrid = mode === 'line' || selection?.kind === 'line'
 
   function toCell(e: React.MouseEvent<SVGRectElement>): { gx: number; gy: number } | null {
     const svg = (e.currentTarget.ownerSVGElement ?? null) as SVGSVGElement | null
@@ -101,7 +123,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     <svg
       ref={ref}
       className={`canvas mode-${mode}`}
-      viewBox={`0 0 ${W} ${H}`}
+      viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
       preserveAspectRatio="xMidYMid meet"
     >
       <defs>
@@ -168,38 +190,38 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 
       {/* canvas background (export forces this to white in exportPng) */}
       <rect
-        x={0}
-        y={0}
-        width={W}
-        height={H}
+        x={view.x}
+        y={view.y}
+        width={view.w}
+        height={view.h}
         className="canvas-bg"
         onClick={handleBg}
         onMouseMove={handleBgMove}
       />
 
       {/* fine 1/3 sub-grid: shown while drawing wires or adjusting a selected one */}
-      {(mode === 'line' || selection?.kind === 'line') && (
+      {showSubGrid && (
         <g pointerEvents="none">
-          {Array.from({ length: (W / GRID) * 3 + 1 }).map((_, i) =>
-            i % 3 === 0 ? null : (
+          {gridLines(GRID / 3).xs.map((x, i) =>
+            Math.round(x / (GRID / 3)) % 3 === 0 ? null : (
               <line
                 key={`mv${i}`}
-                x1={(i * GRID) / 3}
-                y1={0}
-                x2={(i * GRID) / 3}
-                y2={H}
+                x1={x}
+                y1={view.y}
+                x2={x}
+                y2={view.y + view.h}
                 className="grid-minor"
               />
             ),
           )}
-          {Array.from({ length: (H / GRID) * 3 + 1 }).map((_, i) =>
-            i % 3 === 0 ? null : (
+          {gridLines(GRID / 3).ys.map((y, i) =>
+            Math.round(y / (GRID / 3)) % 3 === 0 ? null : (
               <line
                 key={`mh${i}`}
-                x1={0}
-                y1={(i * GRID) / 3}
-                x2={W}
-                y2={(i * GRID) / 3}
+                x1={view.x}
+                y1={y}
+                x2={view.x + view.w}
+                y2={y}
                 className="grid-minor"
               />
             ),
@@ -209,46 +231,53 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 
       {/* grid lines */}
       <g pointerEvents="none" className="grid">
-        {Array.from({ length: W / GRID + 1 }).map((_, i) => (
+        {major.xs.map((x, i) => (
           <line
             key={`v${i}`}
-            x1={i * GRID}
-            y1={0}
-            x2={i * GRID}
-            y2={H}
+            x1={x}
+            y1={view.y}
+            x2={x}
+            y2={view.y + view.h}
             className="grid-line"
           />
         ))}
-        {Array.from({ length: H / GRID + 1 }).map((_, i) => (
+        {major.ys.map((y, i) => (
           <line
             key={`h${i}`}
-            x1={0}
-            y1={i * GRID}
-            x2={W}
-            y2={i * GRID}
+            x1={view.x}
+            y1={y}
+            x2={view.x + view.w}
+            y2={y}
             className="grid-line"
           />
         ))}
       </g>
 
+      {/* all diagram content (measured by exportPng via getBBox) */}
+      <g id="content">
       {/* free wire lines (under nodes/edges) */}
       <g {...hitProps}>
         {doc.lines.map((l) => {
           const selected = selection?.kind === 'line' && selection.id === l.id
+          const x1 = l.x1 * GRID
+          const y1 = l.y1 * GRID
+          const x2 = l.x2 * GRID
+          const y2 = l.y2 * GRID
+          // label anchor along the line, nudged to one side so it clears the wire
+          const pos = l.labelPos ?? 'middle'
+          const t = pos === 'start' ? 0.12 : pos === 'end' ? 0.88 : 0.5
+          const len = Math.hypot(x2 - x1, y2 - y1) || 1
+          const off = 9
+          const lx = x1 + (x2 - x1) * t + (-(y2 - y1) / len) * off
+          const ly = y1 + (y2 - y1) * t + ((x2 - x1) / len) * off
           return (
             <g key={l.id} onClick={() => onLineClick(l.id)} className="edge">
+              <line x1={x1} y1={y1} x2={x2} y2={y2} className="edge-hit" />
               <line
-                x1={l.x1 * GRID}
-                y1={l.y1 * GRID}
-                x2={l.x2 * GRID}
-                y2={l.y2 * GRID}
-                className="edge-hit"
-              />
-              <line
-                x1={l.x1 * GRID}
-                y1={l.y1 * GRID}
-                x2={l.x2 * GRID}
-                y2={l.y2 * GRID}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
                 className={`edge-line${selected ? ' selected' : ''}`}
                 markerStart={
                   l.arrow === 'start' || l.arrow === 'both'
@@ -261,6 +290,11 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                     : undefined
                 }
               />
+              {l.label && (
+                <text x={lx} y={ly} className="edge-label">
+                  {l.label}
+                </text>
+              )}
             </g>
           )
         })}
@@ -462,6 +496,8 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           )
         })}
       </g>
+      </g>
+      {/* end #content */}
 
       {/* shape/line-drawing preview (first corner marker + rubber-band) */}
       {pendingCorner && (

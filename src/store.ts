@@ -1,5 +1,13 @@
 import { useReducer } from 'react'
-import type { Doc, DiagNode, Shape, RelType, GateType, LineArrow } from './types'
+import type {
+  Doc,
+  DiagNode,
+  Shape,
+  RelType,
+  GateType,
+  LineArrow,
+  LabelPos,
+} from './types'
 
 export type Action =
   | {
@@ -21,6 +29,8 @@ export type Action =
   | { type: 'MOVE_LINE'; id: string; dx: number; dy: number }
   | { type: 'RESIZE_LINE'; id: string; delta: number }
   | { type: 'SET_LINE_ARROW'; id: string; arrow: LineArrow }
+  | { type: 'SET_LINE_LABEL'; id: string; label: string }
+  | { type: 'SET_LINE_LABEL_POS'; id: string; pos: LabelPos }
   | { type: 'SET_NODE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_CURVE'; id: string; curve: number }
@@ -151,6 +161,16 @@ function docReducer(doc: Doc, a: Action): Doc {
             ? { ...l, arrow: a.arrow === 'none' ? undefined : a.arrow }
             : l,
         ),
+      }
+    case 'SET_LINE_LABEL':
+      return {
+        ...doc,
+        lines: doc.lines.map((l) => (l.id === a.id ? { ...l, label: a.label } : l)),
+      }
+    case 'SET_LINE_LABEL_POS':
+      return {
+        ...doc,
+        lines: doc.lines.map((l) => (l.id === a.id ? { ...l, labelPos: a.pos } : l)),
       }
     case 'SET_NODE_LABEL':
       return {

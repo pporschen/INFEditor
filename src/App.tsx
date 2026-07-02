@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Canvas } from './Canvas'
+import type { View } from './Canvas'
 import { useEditor } from './store'
 import { exportPng } from './exportPng'
 import { GATES, GATE_ORDER } from './gates'
-import type { Doc, LineArrow, Mode, RelType, Selection, Shape } from './types'
+import { W, H } from './geometry'
+import type {
+  Doc,
+  LabelPos,
+  LineArrow,
+  Mode,
+  RelType,
+  Selection,
+  Shape,
+} from './types'
 
 const STORAGE_KEY = 'infeditor.doc.v1'
 const CURVE_STEP = 24 // pixels of bow added per button press
@@ -12,6 +22,8 @@ const LOOP_SIZE_MIN = -18 // clamp for self-loop extra size (keeps a visible loo
 const LOOP_SIZE_MAX = 160
 const LOOP_ANGLE_STEP = 30 // degrees the loop rotates per button press
 const LINE_STEP = 1 / 3 // 1/3 of a grid cell — nudge/resize step for wires
+const ZOOM_MIN = W * 0.25 // most zoomed-in (smallest viewBox)
+const ZOOM_MAX = W * 8 // most zoomed-out (largest viewBox)
 
 // UML relationship picker. Glyphs mark the end where the marker sits.
 // Direction: draw from the "source" of the arrow to its head — subclass→super
@@ -50,6 +62,7 @@ export default function App() {
     null,
   )
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null)
+  const [view, setView] = useState<View>({ x: 0, y: 0, w: W, h: H })
   const svgRef = useRef<SVGSVGElement>(null)
   const labelInputRef = useRef<HTMLInputElement>(null)
   const focusLabelRef = useRef(false) // request to focus the label after box creation
@@ -89,6 +102,24 @@ export default function App() {
     setHoverCell(null)
     setSelection(null)
   }, [])
+
+  // pan by a fraction of the visible area (so it scales with zoom)
+  function panBy(fx: number, fy: number) {
+    setView((v) => ({ ...v, x: v.x + v.w * fx, y: v.y + v.h * fy }))
+  }
+
+  // zoom around the view center; factor > 1 zooms out
+  function zoomBy(factor: number) {
+    setView((v) => {
+      const w = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v.w * factor))
+      const h = w * (v.h / v.w)
+      return { x: v.x + (v.w - w) / 2, y: v.y + (v.h - h) / 2, w, h }
+    })
+  }
+
+  function resetView() {
+    setView({ x: 0, y: 0, w: W, h: H })
+  }
 
   function handleBgClick(gx: number, gy: number) {
     if (mode === 'node') {
@@ -222,6 +253,10 @@ export default function App() {
 
   function setLineArrow(id: string, arrow: LineArrow) {
     dispatch({ type: 'SET_LINE_ARROW', id, arrow })
+  }
+
+  function setLineLabelPos(id: string, pos: LabelPos) {
+    dispatch({ type: 'SET_LINE_LABEL_POS', id, pos })
   }
 
   // Nudge an edge's curvature by a step, clamped to a sane range.
@@ -397,6 +432,25 @@ export default function App() {
         </div>
 
         <div className="group">
+          <span className="group-title">View (pan / zoom)</span>
+          <div className="dpad">
+            <span />
+            <button onClick={() => panBy(0, -0.3)} title="Pan up">↑</button>
+            <span />
+            <button onClick={() => panBy(-0.3, 0)} title="Pan left">←</button>
+            <button onClick={resetView} title="Reset view">⌂</button>
+            <button onClick={() => panBy(0.3, 0)} title="Pan right">→</button>
+            <span />
+            <button onClick={() => panBy(0, 0.3)} title="Pan down">↓</button>
+            <span />
+          </div>
+          <div className="curve-row">
+            <button onClick={() => zoomBy(0.8)} title="Zoom in">＋</button>
+            <button onClick={() => zoomBy(1.25)} title="Zoom out">－</button>
+          </div>
+        </div>
+
+        <div className="group">
           <span className="group-title">Export</span>
           <button
             onClick={() => svgRef.current && exportPng(svgRef.current)}
@@ -443,6 +497,7 @@ export default function App() {
           pendingCorner={pendingCorner}
           hoverCell={hoverCell}
           drawShape={shape}
+          view={view}
           onBgClick={handleBgClick}
           onBgMove={handleBgMove}
           onNodeClick={handleNodeClick}
@@ -608,6 +663,32 @@ export default function App() {
         )}
         {selectedLineId && (
           <>
+            <label>
+              Label
+              <input
+                value={selectedLine?.label ?? ''}
+                onChange={(e) =>
+                  dispatch({
+                    type: 'SET_LINE_LABEL',
+                    id: selectedLineId,
+                    label: e.target.value,
+                  })
+                }
+                onKeyDown={handleLabelKey}
+              />
+            </label>
+            <span className="group-title">Label position</span>
+            <div className="curve-row">
+              {(['start', 'middle', 'end'] as LabelPos[]).map((p) => (
+                <button
+                  key={p}
+                  className={(selectedLine?.labelPos ?? 'middle') === p ? 'active' : ''}
+                  onClick={() => setLineLabelPos(selectedLineId, p)}
+                >
+                  {p === 'start' ? 'Start' : p === 'middle' ? 'Middle' : 'End'}
+                </button>
+              ))}
+            </div>
             <span className="group-title">Move (1/3 cell)</span>
             <div className="dpad">
               <span />
