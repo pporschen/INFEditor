@@ -45,9 +45,10 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
   clone.setAttribute('viewBox', `${box.x} ${box.y} ${box.w} ${box.h}`)
 
-  // drop editor-only decorations and the grid (cleaner output)
+  // drop editor-only decorations, the grid, and empty-text placeholders
   clone.querySelectorAll('.ui-only').forEach((el) => el.remove())
   clone.querySelectorAll('.grid-line, .grid-minor').forEach((el) => el.remove())
+  clone.querySelectorAll('.free-text.placeholder').forEach((el) => el.remove())
   clone.querySelectorAll('.selected').forEach((el) => el.classList.remove('selected'))
 
   // make the white background cover the exported region
@@ -93,6 +94,26 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
     'stroke-width': '2',
   })
   setStyle(clone, '.dot-fill', { fill: LIGHT.stroke })
+  setStyle(clone, '.free-text', {
+    fill: LIGHT.ink,
+    'font-size': String(16 * ls),
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
+  setStyle(clone, '.table-cell', {
+    fill: LIGHT.bg,
+    stroke: LIGHT.stroke,
+    'stroke-width': '1.5',
+  })
+  setStyle(clone, '.table-cell.table-header', { fill: '#f0f2f7' })
+  setStyle(clone, '.table-text', {
+    fill: LIGHT.ink,
+    'font-size': String(15 * ls),
+    'text-anchor': 'middle',
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
+  setStyle(clone, '.table-header-text', { 'font-weight': '600' })
   setStyle(clone, '.edge-line', { stroke: LIGHT.stroke, 'stroke-width': '2', fill: 'none' })
   setStyle(clone, '.node-label', {
     fill: LIGHT.ink,

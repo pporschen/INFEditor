@@ -58,16 +58,41 @@ export interface DiagLine {
   labelPos?: LabelPos // where the label sits along the wire (default 'middle')
 }
 
+// A free-standing text label placed anywhere on the grid.
+export interface DiagText {
+  id: string
+  x: number
+  y: number
+  text: string
+}
+
+// A table / truth-table. Purely a formatting grid — the user fills all values.
+export interface DiagTable {
+  id: string
+  x: number // top-left grid column
+  y: number // top-left grid row
+  cols: number
+  rows: number
+  cw: number // cell width in grid cells (each cell is 1 grid row tall)
+  header: boolean // first row rendered as a header
+  cells: string[][] // [row][col] contents (verbatim, may contain LaTeX)
+  inputCols?: number // truth tables: how many left columns are inputs
+}
+
 export interface Doc {
   nodes: DiagNode[]
   edges: DiagEdge[]
   lines: DiagLine[]
+  texts: DiagText[]
+  tables: DiagTable[]
 }
 
-export type Mode = 'select' | 'node' | 'edge' | 'line' | 'delete'
+export type Mode = 'select' | 'node' | 'edge' | 'line' | 'text' | 'table' | 'delete'
 
 export type Selection =
   | { kind: 'node'; id: string }
   | { kind: 'edge'; id: string }
   | { kind: 'line'; id: string }
+  | { kind: 'text'; id: string }
+  | { kind: 'table'; id: string }
   | null

@@ -2,6 +2,7 @@ import { useReducer } from 'react'
 import type {
   Doc,
   DiagNode,
+  DiagTable,
   Shape,
   RelType,
   GateType,
@@ -31,6 +32,19 @@ export type Action =
   | { type: 'SET_LINE_ARROW'; id: string; arrow: LineArrow }
   | { type: 'SET_LINE_LABEL'; id: string; label: string }
   | { type: 'SET_LINE_LABEL_POS'; id: string; pos: LabelPos }
+  | { type: 'ADD_TEXT'; id: string; x: number; y: number }
+  | { type: 'SET_TEXT'; id: string; text: string }
+  | { type: 'MOVE_TEXT'; id: string; x: number; y: number }
+  | { type: 'DELETE_TEXT'; id: string }
+  | { type: 'ADD_TABLE'; table: DiagTable }
+  | { type: 'SET_TABLE_CELL'; id: string; row: number; col: number; text: string }
+  | { type: 'TABLE_ROWS'; id: string; delta: number }
+  | { type: 'TABLE_COLS'; id: string; delta: number }
+  | { type: 'TABLE_WIDTH'; id: string; delta: number }
+  | { type: 'TOGGLE_TABLE_HEADER'; id: string }
+  | { type: 'FILL_TABLE_INPUTS'; id: string }
+  | { type: 'MOVE_TABLE'; id: string; x: number; y: number }
+  | { type: 'DELETE_TABLE'; id: string }
   | { type: 'SET_NODE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_CURVE'; id: string; curve: number }
@@ -218,8 +232,109 @@ function docReducer(doc: Doc, a: Action): Doc {
         ...doc,
         nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, start: !n.start } : n)),
       }
+    case 'ADD_TEXT':
+      return {
+        ...doc,
+        texts: [...doc.texts, { id: a.id, x: a.x, y: a.y, text: '' }],
+      }
+    case 'SET_TEXT':
+      return {
+        ...doc,
+        texts: doc.texts.map((t) => (t.id === a.id ? { ...t, text: a.text } : t)),
+      }
+    case 'MOVE_TEXT':
+      return {
+        ...doc,
+        texts: doc.texts.map((t) => (t.id === a.id ? { ...t, x: a.x, y: a.y } : t)),
+      }
+    case 'DELETE_TEXT':
+      return { ...doc, texts: doc.texts.filter((t) => t.id !== a.id) }
+    case 'ADD_TABLE':
+      return { ...doc, tables: [...doc.tables, a.table] }
+    case 'SET_TABLE_CELL':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) =>
+          t.id === a.id
+            ? {
+                ...t,
+                cells: t.cells.map((row, r) =>
+                  r === a.row
+                    ? row.map((c, ci) => (ci === a.col ? a.text : c))
+                    : row,
+                ),
+              }
+            : t,
+        ),
+      }
+    case 'TABLE_ROWS':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) => {
+          if (t.id !== a.id) return t
+          const rows = Math.max(1, t.rows + a.delta)
+          let cells = t.cells.slice(0, rows)
+          while (cells.length < rows) cells.push(Array(t.cols).fill(''))
+          return { ...t, rows, cells }
+        }),
+      }
+    case 'TABLE_COLS':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) => {
+          if (t.id !== a.id) return t
+          const cols = Math.max(1, t.cols + a.delta)
+          const cells = t.cells.map((row) => {
+            const r = row.slice(0, cols)
+            while (r.length < cols) r.push('')
+            return r
+          })
+          const inputCols = t.inputCols ? Math.min(t.inputCols, cols) : t.inputCols
+          return { ...t, cols, cells, inputCols }
+        }),
+      }
+    case 'TABLE_WIDTH':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) =>
+          t.id === a.id ? { ...t, cw: Math.max(1, t.cw + a.delta) } : t,
+        ),
+      }
+    case 'TOGGLE_TABLE_HEADER':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) =>
+          t.id === a.id ? { ...t, header: !t.header } : t,
+        ),
+      }
+    case 'FILL_TABLE_INPUTS':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) => {
+          if (t.id !== a.id || !t.inputCols) return t
+          const n = t.inputCols
+          const first = t.header ? 1 : 0
+          const cells = t.cells.map((row) => row.slice())
+          const dataRows = t.rows - first
+          for (let i = 0; i < dataRows && i < 1 << n; i++) {
+            for (let j = 0; j < n; j++) {
+              cells[first + i][j] = String((i >> (n - 1 - j)) & 1)
+            }
+          }
+          return { ...t, cells }
+        }),
+      }
+    case 'MOVE_TABLE':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) =>
+          t.id === a.id ? { ...t, x: a.x, y: a.y } : t,
+        ),
+      }
+    case 'DELETE_TABLE':
+      return { ...doc, tables: doc.tables.filter((t) => t.id !== a.id) }
     case 'CLEAR':
-      return { nodes: [], edges: [], lines: [] }
+      return { nodes: [], edges: [], lines: [], texts: [], tables: [] }
     default:
       return doc
   }

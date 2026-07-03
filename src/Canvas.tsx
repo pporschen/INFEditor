@@ -1,10 +1,54 @@
-import { forwardRef, useMemo, type CSSProperties } from 'react'
+import { forwardRef, useMemo, type CSSProperties, type ReactNode } from 'react'
 import type { Doc, DiagEdge, Mode, Selection, Shape } from './types'
 import { GRID, center, anchor, halfExtents } from './geometry'
 import { GATES } from './gates'
 
 const LOOP_BASE = 30 // base bulge distance of a self-loop, in px
 const LOOP_W = 20 // half-width of the self-loop
+
+// Render LaTeX-style sub/superscript markup: q_0, x^2, a_{10}, m^{-1}.
+// Everything else is passed through unchanged.
+function renderRich(s: string): ReactNode {
+  const out: ReactNode[] = []
+  let buf = ''
+  let key = 0
+  let i = 0
+  const flush = () => {
+    if (buf) {
+      out.push(buf)
+      buf = ''
+    }
+  }
+  while (i < s.length) {
+    const ch = s[i]
+    if ((ch === '_' || ch === '^') && i + 1 < s.length) {
+      flush()
+      i++
+      let grp = ''
+      if (s[i] === '{') {
+        i++
+        while (i < s.length && s[i] !== '}') grp += s[i++]
+        if (s[i] === '}') i++
+      } else {
+        grp = s[i++]
+      }
+      out.push(
+        <tspan
+          key={key++}
+          baselineShift={ch === '^' ? 'super' : 'sub'}
+          fontSize="0.7em"
+        >
+          {grp}
+        </tspan>,
+      )
+    } else {
+      buf += ch
+      i++
+    }
+  }
+  flush()
+  return out
+}
 
 // Map a relationship type to its markers and line style.
 // diamonds sit at the SOURCE end; arrows/triangles at the TARGET end.
@@ -53,6 +97,9 @@ interface Props {
   onNodeClick: (id: string) => void
   onEdgeClick: (id: string) => void
   onLineClick: (id: string) => void
+  onTextClick: (id: string) => void
+  cellSel: { id: string; row: number; col: number } | null
+  onCellClick: (id: string, row: number, col: number) => void
 }
 
 export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
@@ -71,6 +118,9 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     onNodeClick,
     onEdgeClick,
     onLineClick,
+    onTextClick,
+    cellSel,
+    onCellClick,
   },
   ref,
 ) {
@@ -83,7 +133,8 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
   // While placing shapes/dots or drawing wires, let every click fall through to
   // the grid — otherwise existing nodes/edges/lines would swallow the click and
   // you couldn't place, e.g., a dot on top of a line intersection.
-  const placing = mode === 'node' || mode === 'line'
+  const placing =
+    mode === 'node' || mode === 'line' || mode === 'text' || mode === 'table'
   const hitProps = placing ? { pointerEvents: 'none' as const } : {}
 
   // grid line positions covering the visible view (world coordinates)
@@ -97,7 +148,11 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     return { xs, ys }
   }
   const major = gridLines(GRID)
-  const showSubGrid = mode === 'line' || selection?.kind === 'line'
+  const showSubGrid =
+    mode === 'line' ||
+    mode === 'text' ||
+    selection?.kind === 'line' ||
+    selection?.kind === 'text'
 
   function toCell(e: React.MouseEvent<SVGRectElement>): { gx: number; gy: number } | null {
     const svg = (e.currentTarget.ownerSVGElement ?? null) as SVGSVGElement | null
@@ -295,7 +350,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
               />
               {l.label && (
                 <text x={lx} y={ly} className="edge-label">
-                  {l.label}
+                  {renderRich(l.label)}
                 </text>
               )}
             </g>
@@ -340,7 +395,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 />
                 {e.label && (
                   <text x={lx} y={ly} className="edge-label">
-                    {e.label}
+                    {renderRich(e.label)}
                   </text>
                 )}
               </g>
@@ -381,7 +436,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
               />
               {e.label && (
                 <text x={lx} y={ly - 6} className="edge-label">
-                  {e.label}
+                  {renderRich(e.label)}
                 </text>
               )}
             </g>
@@ -486,16 +541,97 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                   </text>
                   {n.label && (
                     <text x={c.x} y={c.y - hh - 8} className="node-label">
-                      {n.label}
+                      {renderRich(n.label)}
                     </text>
                   )}
                 </>
               ) : (
                 <text x={c.x} y={c.y} className="node-label">
-                  {n.label}
+                  {renderRich(n.label)}
                 </text>
               )}
             </g>
+          )
+        })}
+      </g>
+
+      {/* tables / truth tables */}
+      <g>
+        {doc.tables.map((tb) => {
+          const tableSel = selection?.kind === 'table' && selection.id === tb.id
+          const cw = tb.cw * GRID
+          const ch = GRID
+          const px = tb.x * GRID
+          const py = tb.y * GRID
+          return (
+            <g key={tb.id}>
+              {tableSel && (
+                <rect
+                  className="ui-only ring ring-sel"
+                  x={px - 4}
+                  y={py - 4}
+                  width={tb.cols * cw + 8}
+                  height={tb.rows * ch + 8}
+                  fill="none"
+                />
+              )}
+              {tb.cells.map((row, r) =>
+                row.map((cellText, c) => {
+                  const isHeader = tb.header && r === 0
+                  const cx = px + c * cw
+                  const cy = py + r * ch
+                  const sel =
+                    cellSel &&
+                    cellSel.id === tb.id &&
+                    cellSel.row === r &&
+                    cellSel.col === c
+                  return (
+                    <g
+                      key={`${r}-${c}`}
+                      {...hitProps}
+                      onClick={() => onCellClick(tb.id, r, c)}
+                    >
+                      <rect
+                        x={cx}
+                        y={cy}
+                        width={cw}
+                        height={ch}
+                        className={`table-cell${isHeader ? ' table-header' : ''}${
+                          sel ? ' selected' : ''
+                        }`}
+                      />
+                      <text
+                        x={cx + cw / 2}
+                        y={cy + ch / 2}
+                        className={`table-text${isHeader ? ' table-header-text' : ''}`}
+                      >
+                        {renderRich(cellText)}
+                      </text>
+                    </g>
+                  )
+                }),
+              )}
+            </g>
+          )
+        })}
+      </g>
+
+      {/* free-standing text labels */}
+      <g {...hitProps}>
+        {doc.texts.map((t) => {
+          const selected = selection?.kind === 'text' && selection.id === t.id
+          return (
+            <text
+              key={t.id}
+              x={t.x * GRID}
+              y={t.y * GRID}
+              onClick={() => onTextClick(t.id)}
+              className={`free-text${selected ? ' selected' : ''}${
+                t.text ? '' : ' placeholder'
+              }`}
+            >
+              {t.text ? renderRich(t.text) : 'Text…'}
+            </text>
           )
         })}
       </g>
@@ -512,6 +648,15 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
               x2={hoverCell.x * GRID}
               y2={hoverCell.y * GRID}
               className="preview-line"
+            />
+          )}
+          {hoverCell && mode === 'table' && (
+            <rect
+              x={Math.min(pendingCorner.x, hoverCell.x) * GRID}
+              y={Math.min(pendingCorner.y, hoverCell.y) * GRID}
+              width={Math.abs(hoverCell.x - pendingCorner.x) * GRID}
+              height={Math.abs(hoverCell.y - pendingCorner.y) * GRID}
+              className="preview-box"
             />
           )}
           {hoverCell &&

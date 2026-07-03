@@ -230,6 +230,47 @@ button.active kbd {
   fill: var(--stroke);
 }
 
+/* tables */
+.table-cell {
+  fill: var(--canvas-bg);
+  stroke: var(--stroke);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+.table-cell.table-header {
+  fill: var(--btn);
+}
+.table-cell.selected {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.table-text {
+  font-size: calc(15px * var(--label-scale, 1));
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  fill: var(--ink);
+}
+.table-header-text {
+  font-weight: 600;
+}
+
+/* free-standing text label */
+.free-text {
+  font-size: calc(16px * var(--label-scale, 1));
+  dominant-baseline: central;
+  fill: var(--ink);
+  cursor: pointer;
+}
+.free-text.placeholder {
+  fill: var(--muted);
+  font-style: italic;
+}
+.free-text.selected {
+  fill: var(--accent);
+}
+
 /* edges */
 .edge {
   cursor: pointer;
@@ -337,6 +378,18 @@ button.active .gate-hint {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+.latex-out {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  resize: vertical;
+  margin-bottom: 6px;
 }
 .muted {
   color: var(--muted);

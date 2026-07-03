@@ -5,8 +5,10 @@ import { useEditor } from './store'
 import { exportPng } from './exportPng'
 import { GATES, GATE_ORDER } from './gates'
 import { W, H } from './geometry'
+import { tableToLatex } from './latex'
 import type {
   Doc,
+  DiagTable,
   LabelPos,
   LineArrow,
   Mode,
@@ -44,12 +46,39 @@ function loadInitial(): Doc {
     if (raw) {
       const d = JSON.parse(raw)
       // tolerate saves from before a collection existed
-      return { nodes: d.nodes ?? [], edges: d.edges ?? [], lines: d.lines ?? [] }
+      return {
+        nodes: d.nodes ?? [],
+        edges: d.edges ?? [],
+        lines: d.lines ?? [],
+        texts: d.texts ?? [],
+        tables: d.tables ?? [],
+      }
     }
   } catch {
     /* ignore corrupt autosave */
   }
-  return { nodes: [], edges: [], lines: [] }
+  return { nodes: [], edges: [], lines: [], texts: [], tables: [] }
+}
+
+// Build a fresh table. `inputCols > 0` makes a truth-table shell (n inputs +
+// one output column, 2^n data rows). All cells start empty — the editor never
+// fills in content.
+function makeTable(id: string, x: number, y: number, inputCols: number): DiagTable {
+  const blank = { cols: 3, rows: 3 }
+  const cols = inputCols > 0 ? inputCols + 1 : blank.cols
+  const rows = inputCols > 0 ? (1 << inputCols) + 1 : blank.rows
+  const cells = Array.from({ length: rows }, () => Array(cols).fill(''))
+  return {
+    id,
+    x,
+    y,
+    cols,
+    rows,
+    cw: 3,
+    header: true,
+    cells,
+    inputCols: inputCols > 0 ? inputCols : undefined,
+  }
 }
 
 export default function App() {
@@ -64,6 +93,12 @@ export default function App() {
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null)
   const [view, setView] = useState<View>({ x: 0, y: 0, w: W, h: H })
   const [labelScale, setLabelScale] = useState(1.4)
+  const [tablePreset, setTablePreset] = useState(0) // 0 = blank, n = truth table with n inputs
+  const [cellSel, setCellSel] = useState<{
+    id: string
+    row: number
+    col: number
+  } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const labelInputRef = useRef<HTMLInputElement>(null)
   const focusLabelRef = useRef(false) // request to focus the label after box creation
@@ -96,6 +131,14 @@ export default function App() {
       ? doc.lines.find((l) => l.id === selection.id) ?? null
       : null
   const selectedLineId = selectedLine?.id ?? null
+  const selectedText =
+    selection?.kind === 'text'
+      ? doc.texts.find((t) => t.id === selection.id) ?? null
+      : null
+  const selectedTable =
+    selection?.kind === 'table'
+      ? doc.tables.find((t) => t.id === selection.id) ?? null
+      : null
 
   const changeMode = useCallback((m: Mode) => {
     returnModeRef.current = null // explicit mode switch cancels any resume
@@ -180,16 +223,71 @@ export default function App() {
           setSelection({ kind: 'line', id })
         }
       }
+    } else if (mode === 'text') {
+      // drop a text label, then focus it for immediate typing
+      const id = crypto.randomUUID()
+      dispatch({ type: 'ADD_TEXT', id, x: gx, y: gy })
+      returnModeRef.current = 'text'
+      setMode('select')
+      setSelection({ kind: 'text', id })
+      focusLabelRef.current = true
+    } else if (mode === 'table') {
+      if (tablePreset > 0) {
+        // truth table: single dwell — structure is fixed by the variable count
+        const id = crypto.randomUUID()
+        dispatch({ type: 'ADD_TABLE', table: makeTable(id, gx, gy, tablePreset) })
+        returnModeRef.current = 'table'
+        setMode('select')
+        setSelection({ kind: 'table', id })
+        setCellSel(null)
+      } else if (pendingCorner === null) {
+        // blank table: draw a region with two corners
+        setPendingCorner({ x: gx, y: gy })
+        setHoverCell({ x: gx, y: gy })
+      } else {
+        setPendingCorner(null)
+        setHoverCell(null)
+        const cols = Math.abs(gx - pendingCorner.x)
+        const rows = Math.abs(gy - pendingCorner.y)
+        if (cols > 0 && rows > 0) {
+          const id = crypto.randomUUID()
+          const x0 = Math.min(pendingCorner.x, gx)
+          const y0 = Math.min(pendingCorner.y, gy)
+          dispatch({
+            type: 'ADD_TABLE',
+            table: {
+              id,
+              x: x0,
+              y: y0,
+              cols,
+              rows,
+              cw: 1, // each drawn cell is one grid square; widen later if needed
+              header: true,
+              cells: Array.from({ length: rows }, () => Array(cols).fill('')),
+            },
+          })
+          returnModeRef.current = 'table'
+          setMode('select')
+          setSelection({ kind: 'table', id })
+          setCellSel(null)
+        }
+      }
     } else if (mode === 'select' && selection?.kind === 'node') {
       dispatch({ type: 'MOVE_NODE', id: selection.id, x: gx, y: gy })
+    } else if (mode === 'select' && selection?.kind === 'text') {
+      dispatch({ type: 'MOVE_TEXT', id: selection.id, x: gx, y: gy })
+    } else if (mode === 'select' && selection?.kind === 'table') {
+      // clicking empty space moves the table by its top-left corner
+      dispatch({ type: 'MOVE_TABLE', id: selection.id, x: gx, y: gy })
+      setCellSel(null)
     } else if (mode === 'edge') {
       setPendingFrom(null)
     }
   }
 
   function handleBgMove(gx: number, gy: number) {
-    // only track the cursor while actively drawing a shape/line (keeps re-renders scoped)
-    if ((mode === 'node' || mode === 'line') && pendingCorner) {
+    // only track the cursor while actively drawing a shape/line/table (scoped)
+    if ((mode === 'node' || mode === 'line' || mode === 'table') && pendingCorner) {
       setHoverCell((h) => (h && h.x === gx && h.y === gy ? h : { x: gx, y: gy }))
     }
   }
@@ -201,6 +299,31 @@ export default function App() {
     } else if (mode === 'delete') {
       dispatch({ type: 'DELETE_LINE', id })
       setSelection(null)
+    }
+  }
+
+  function handleTextClick(id: string) {
+    if (mode === 'select') {
+      returnModeRef.current = null
+      setSelection({ kind: 'text', id })
+    } else if (mode === 'delete') {
+      dispatch({ type: 'DELETE_TEXT', id })
+      setSelection(null)
+    }
+  }
+
+  function handleCellClick(id: string, row: number, col: number) {
+    if (mode === 'delete') {
+      dispatch({ type: 'DELETE_TABLE', id })
+      setSelection(null)
+      setCellSel(null)
+      return
+    }
+    if (mode === 'select') {
+      returnModeRef.current = null
+      setSelection({ kind: 'table', id })
+      setCellSel({ id, row, col })
+      focusLabelRef.current = true // focus the cell input
     }
   }
 
@@ -273,6 +396,13 @@ export default function App() {
     dispatch({ type: 'SET_LINE_LABEL_POS', id, pos })
   }
 
+  // nudge a text label by a fraction of a cell (same step as wires)
+  function nudgeText(dx: number, dy: number) {
+    const t = selection?.kind === 'text' ? doc.texts.find((x) => x.id === selection.id) : null
+    if (!t) return
+    dispatch({ type: 'MOVE_TEXT', id: t.id, x: t.x + dx, y: t.y + dy })
+  }
+
   // Nudge an edge's curvature by a step, clamped to a sane range.
   function bendEdge(id: string, delta: number) {
     const edge = doc.edges.find((e) => e.id === id)
@@ -294,6 +424,34 @@ export default function App() {
     const edge = doc.edges.find((e) => e.id === id)
     if (!edge) return
     dispatch({ type: 'SET_EDGE_ANGLE', id, angle: (edge.angle ?? -90) + deltaDeg })
+  }
+
+  // Write to whichever label field is currently being edited.
+  function setActiveLabel(text: string) {
+    if (selection?.kind === 'node') dispatch({ type: 'SET_NODE_LABEL', id: selection.id, label: text })
+    else if (selection?.kind === 'edge') dispatch({ type: 'SET_EDGE_LABEL', id: selection.id, label: text })
+    else if (selection?.kind === 'text') dispatch({ type: 'SET_TEXT', id: selection.id, text })
+    else if (selection?.kind === 'line') dispatch({ type: 'SET_LINE_LABEL', id: selection.id, label: text })
+    else if (selection?.kind === 'table' && cellSel)
+      dispatch({ type: 'SET_TABLE_CELL', id: cellSel.id, row: cellSel.row, col: cellSel.col, text })
+  }
+
+  // Insert sub/superscript markup (_{}/^{}) into the focused label field,
+  // wrapping any selected text and placing the caret inside the braces.
+  function insertScript(kind: 'sup' | 'sub') {
+    const el = labelInputRef.current
+    if (!el) return
+    const sym = kind === 'sup' ? '^' : '_'
+    const start = el.selectionStart ?? el.value.length
+    const end = el.selectionEnd ?? start
+    const inner = el.value.slice(start, end)
+    const next = el.value.slice(0, start) + `${sym}{${inner}}` + el.value.slice(end)
+    setActiveLabel(next)
+    const caret = start + 2 + inner.length // just before the closing brace
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(caret, caret)
+    })
   }
 
   // Enter or Escape leaves the label field (Escape also deselects).
@@ -327,6 +485,12 @@ export default function App() {
         case 'l':
           changeMode('line')
           break
+        case 't':
+          changeMode('text')
+          break
+        case 'b':
+          changeMode('table')
+          break
         case 'd':
           changeMode('delete')
           break
@@ -344,7 +508,12 @@ export default function App() {
             dispatch({ type: 'DELETE_EDGE', id: selection.id })
           else if (selection?.kind === 'line')
             dispatch({ type: 'DELETE_LINE', id: selection.id })
+          else if (selection?.kind === 'text')
+            dispatch({ type: 'DELETE_TEXT', id: selection.id })
+          else if (selection?.kind === 'table')
+            dispatch({ type: 'DELETE_TABLE', id: selection.id })
           setSelection(null)
+          setCellSel(null)
           break
       }
     }
@@ -383,6 +552,18 @@ export default function App() {
               onClick={() => changeMode('line')}
             >
               Line <kbd>l</kbd>
+            </button>
+            <button
+              className={mode === 'text' ? 'active' : ''}
+              onClick={() => changeMode('text')}
+            >
+              Text <kbd>t</kbd>
+            </button>
+            <button
+              className={mode === 'table' ? 'active' : ''}
+              onClick={() => changeMode('table')}
+            >
+              Table <kbd>b</kbd>
             </button>
             <button
               className={mode === 'delete' ? 'active danger' : 'danger'}
@@ -426,6 +607,54 @@ export default function App() {
                 }}
               >
                 ● Dot
+              </button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'table' && (
+          <div className="group">
+            <span className="group-title">Table type</span>
+            <div className="btn-grid">
+              <button
+                className={tablePreset === 0 ? 'active' : ''}
+                onClick={() => {
+                  setTablePreset(0)
+                  setPendingCorner(null)
+                  setHoverCell(null)
+                }}
+              >
+                Blank (draw)
+              </button>
+              <button
+                className={tablePreset === 2 ? 'active' : ''}
+                onClick={() => {
+                  setTablePreset(2)
+                  setPendingCorner(null)
+                  setHoverCell(null)
+                }}
+              >
+                Truth 2
+              </button>
+              <button
+                className={tablePreset === 3 ? 'active' : ''}
+                onClick={() => {
+                  setTablePreset(3)
+                  setPendingCorner(null)
+                  setHoverCell(null)
+                }}
+              >
+                Truth 3
+              </button>
+              <button
+                className={tablePreset === 4 ? 'active' : ''}
+                onClick={() => {
+                  setTablePreset(4)
+                  setPendingCorner(null)
+                  setHoverCell(null)
+                }}
+              >
+                Truth 4
               </button>
             </div>
           </div>
@@ -519,9 +748,18 @@ export default function App() {
             (pendingCorner
               ? 'Now dwell on the end point of the wire.'
               : 'Dwell on the start point of the wire. After drawing, use the buttons to nudge it by 1/4 cell.')}
+          {mode === 'text' && 'Dwell anywhere to drop a text label, then type it.'}
+          {mode === 'table' &&
+            tablePreset > 0 &&
+            'Dwell to place the truth-table shell, then click a cell to edit. You fill every value.'}
+          {mode === 'table' &&
+            tablePreset === 0 &&
+            (pendingCorner
+              ? 'Now dwell the opposite corner — the region becomes a grid of cells.'
+              : 'Dwell one corner of the table, then the opposite corner.')}
           {mode === 'select' &&
-            'Dwell a node to select; dwell an empty cell to move it (boxes anchor by their top-left corner).'}
-          {mode === 'delete' && 'Dwell a node, edge, or wire to delete it.'}
+            'Dwell a node/text to select; dwell an empty cell to move it (boxes anchor by their top-left corner).'}
+          {mode === 'delete' && 'Dwell a node, edge, wire, or text to delete it.'}
         </div>
       </aside>
 
@@ -542,6 +780,9 @@ export default function App() {
           onNodeClick={handleNodeClick}
           onEdgeClick={handleEdgeClick}
           onLineClick={handleLineClick}
+          onTextClick={handleTextClick}
+          cellSel={cellSel}
+          onCellClick={handleCellClick}
         />
       </main>
 
@@ -705,6 +946,7 @@ export default function App() {
             <label>
               Label
               <input
+                ref={labelInputRef}
                 value={selectedLine?.label ?? ''}
                 onChange={(e) =>
                   dispatch({
@@ -763,6 +1005,132 @@ export default function App() {
                   {label}
                 </button>
               ))}
+            </div>
+          </>
+        )}
+        {selectedText && (
+          <>
+            <label>
+              Text
+              <input
+                ref={labelInputRef}
+                value={selectedText.text}
+                onChange={(e) =>
+                  dispatch({
+                    type: 'SET_TEXT',
+                    id: selectedText.id,
+                    text: e.target.value,
+                  })
+                }
+                onKeyDown={handleLabelKey}
+                autoFocus
+              />
+            </label>
+            <span className="group-title">Move (1/4 cell)</span>
+            <div className="dpad">
+              <span />
+              <button onClick={() => nudgeText(0, -LINE_STEP)}>↑</button>
+              <span />
+              <button onClick={() => nudgeText(-LINE_STEP, 0)}>←</button>
+              <span />
+              <button onClick={() => nudgeText(LINE_STEP, 0)}>→</button>
+              <span />
+              <button onClick={() => nudgeText(0, LINE_STEP)}>↓</button>
+              <span />
+            </div>
+            <p className="muted">Or dwell an empty cell (Select mode) to move it.</p>
+          </>
+        )}
+        {selectedTable && (
+          <>
+            {cellSel && cellSel.id === selectedTable.id && (
+              <label>
+                Cell (r{cellSel.row + 1}, c{cellSel.col + 1})
+                <input
+                  ref={labelInputRef}
+                  value={selectedTable.cells[cellSel.row]?.[cellSel.col] ?? ''}
+                  onChange={(e) =>
+                    dispatch({
+                      type: 'SET_TABLE_CELL',
+                      id: selectedTable.id,
+                      row: cellSel.row,
+                      col: cellSel.col,
+                      text: e.target.value,
+                    })
+                  }
+                  onKeyDown={handleLabelKey}
+                  autoFocus
+                />
+              </label>
+            )}
+            <span className="group-title">Rows / Columns</span>
+            <div className="btn-grid">
+              <button onClick={() => dispatch({ type: 'TABLE_ROWS', id: selectedTable.id, delta: 1 })}>
+                Row +
+              </button>
+              <button onClick={() => dispatch({ type: 'TABLE_ROWS', id: selectedTable.id, delta: -1 })}>
+                Row −
+              </button>
+              <button onClick={() => dispatch({ type: 'TABLE_COLS', id: selectedTable.id, delta: 1 })}>
+                Col +
+              </button>
+              <button onClick={() => dispatch({ type: 'TABLE_COLS', id: selectedTable.id, delta: -1 })}>
+                Col −
+              </button>
+            </div>
+            <span className="group-title">Cell width</span>
+            <div className="curve-row">
+              <button onClick={() => dispatch({ type: 'TABLE_WIDTH', id: selectedTable.id, delta: -1 })}>
+                −
+              </button>
+              <button onClick={() => dispatch({ type: 'TABLE_WIDTH', id: selectedTable.id, delta: 1 })}>
+                +
+              </button>
+            </div>
+            <button
+              className={selectedTable.header ? 'active' : ''}
+              onClick={() => dispatch({ type: 'TOGGLE_TABLE_HEADER', id: selectedTable.id })}
+            >
+              Header row
+            </button>
+            {selectedTable.inputCols && (
+              <button
+                onClick={() => dispatch({ type: 'FILL_TABLE_INPUTS', id: selectedTable.id })}
+                title="Fill the input columns with the 0/1 pattern (formatting only)"
+              >
+                Fill input pattern
+              </button>
+            )}
+            <span className="group-title">LaTeX (tabular)</span>
+            <textarea className="latex-out" readOnly rows={5} value={tableToLatex(selectedTable)} />
+            <button onClick={() => navigator.clipboard?.writeText(tableToLatex(selectedTable))}>
+              Copy LaTeX
+            </button>
+            <p className="muted">Click a cell to edit; dwell empty space to move the table.</p>
+          </>
+        )}
+        {((selectedNode && selectedNode.shape !== 'dot') ||
+          selectedEdge ||
+          selectedText ||
+          selectedLineId ||
+          (selectedTable && cellSel)) && (
+          <>
+            <span className="group-title">Insert</span>
+            <div className="curve-row">
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertScript('sup')}
+                title="Superscript  ^{ }"
+              >
+                x²
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertScript('sub')}
+                title="Subscript  _{ }"
+              >
+                x₂
+              </button>
             </div>
           </>
         )}
