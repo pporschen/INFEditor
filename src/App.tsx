@@ -454,6 +454,53 @@ export default function App() {
     })
   }
 
+  // Spreadsheet-style navigation while editing a table cell.
+  function handleCellKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!cellSel || !selectedTable) return
+    const { rows, cols } = selectedTable
+    const el = e.currentTarget
+    let { row, col } = cellSel
+    switch (e.key) {
+      case 'Escape':
+        el.blur()
+        setSelection(null)
+        setCellSel(null)
+        return
+      case 'Tab':
+        e.preventDefault()
+        if (e.shiftKey) {
+          col--
+          if (col < 0) {
+            col = cols - 1
+            row = (row - 1 + rows) % rows
+          }
+        } else {
+          col++
+          if (col >= cols) {
+            col = 0
+            row = (row + 1) % rows
+          }
+        }
+        break
+      case 'Enter':
+      case 'ArrowDown':
+        e.preventDefault()
+        row = Math.min(rows - 1, row + 1)
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        row = Math.max(0, row - 1)
+        break
+      default:
+        return // let all other keys (incl. ←/→ for the caret) behave normally
+    }
+    setCellSel({ id: cellSel.id, row, col })
+    requestAnimationFrame(() => {
+      el.focus()
+      el.select()
+    })
+  }
+
   // Enter or Escape leaves the label field (Escape also deselects).
   function handleLabelKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter' || e.key === 'Escape') {
@@ -1058,7 +1105,7 @@ export default function App() {
                       text: e.target.value,
                     })
                   }
-                  onKeyDown={handleLabelKey}
+                  onKeyDown={handleCellKey}
                   autoFocus
                 />
               </label>
