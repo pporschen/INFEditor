@@ -4,7 +4,7 @@ import type { View } from './Canvas'
 import { useEditor } from './store'
 import { exportPng } from './exportPng'
 import { GATES, GATE_ORDER } from './gates'
-import { W, H } from './geometry'
+import { GRID, W, H } from './geometry'
 import { tableToLatex } from './latex'
 import type {
   Doc,
@@ -91,7 +91,8 @@ export default function App() {
     null,
   )
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null)
-  const [view, setView] = useState<View>({ x: 0, y: 0, w: W, h: H })
+  const [view, setView] = useState({ x: 0, y: 0, w: W })
+  const [aspect, setAspect] = useState(H / W) // canvas height/width, keeps the grid full-bleed
   const [labelScale, setLabelScale] = useState(1.4)
   const [tablePreset, setTablePreset] = useState(0) // 0 = blank, n = truth table with n inputs
   const [cellSel, setCellSel] = useState<{
@@ -108,6 +109,48 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(doc))
   }, [doc])
+
+  // track the canvas aspect ratio so the viewBox matches it (no letterboxing)
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) setAspect(r.height / r.width)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const viewBox: View = { x: view.x, y: view.y, w: view.w, h: view.w * aspect }
+
+  // Keep the cell being edited in the top part of the view — the on-screen
+  // gaze keyboard covers the lower half, so a cell that drifts below ~45% of
+  // the viewport would be hidden. Re-pan to place it ~30% from the top.
+  useEffect(() => {
+    if (!cellSel) return
+    const tb = doc.tables.find((t) => t.id === cellSel.id)
+    if (!tb) return
+    const cellX = (tb.x + cellSel.col + 0.5) * GRID
+    const cellY = (tb.y + cellSel.row + 0.5) * GRID
+    setView((v) => {
+      const h = v.w * aspect
+      let { x, y } = v
+      let changed = false
+      const relY = (cellY - v.y) / h
+      if (relY < 0.05 || relY > 0.45) {
+        y = cellY - h * 0.3
+        changed = true
+      }
+      const relX = (cellX - v.x) / v.w
+      if (relX < 0.05 || relX > 0.95) {
+        x = cellX - v.w * 0.5
+        changed = true
+      }
+      return changed ? { ...v, x, y } : v
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cellSel, aspect])
 
   // after a box is created we select it and focus its label input for typing
   useEffect(() => {
@@ -151,20 +194,21 @@ export default function App() {
 
   // pan by a fraction of the visible area (so it scales with zoom)
   function panBy(fx: number, fy: number) {
-    setView((v) => ({ ...v, x: v.x + v.w * fx, y: v.y + v.h * fy }))
+    setView((v) => ({ ...v, x: v.x + v.w * fx, y: v.y + v.w * aspect * fy }))
   }
 
   // zoom around the view center; factor > 1 zooms out
   function zoomBy(factor: number) {
     setView((v) => {
       const w = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v.w * factor))
-      const h = w * (v.h / v.w)
-      return { x: v.x + (v.w - w) / 2, y: v.y + (v.h - h) / 2, w, h }
+      const cx = v.x + v.w / 2
+      const cy = v.y + (v.w * aspect) / 2
+      return { x: cx - w / 2, y: cy - (w * aspect) / 2, w }
     })
   }
 
   function resetView() {
-    setView({ x: 0, y: 0, w: W, h: H })
+    setView({ x: 0, y: 0, w: W })
   }
 
   function handleBgClick(gx: number, gy: number) {
@@ -820,7 +864,7 @@ export default function App() {
           pendingCorner={pendingCorner}
           hoverCell={hoverCell}
           drawShape={shape}
-          view={view}
+          view={viewBox}
           labelScale={labelScale}
           onBgClick={handleBgClick}
           onBgMove={handleBgMove}
