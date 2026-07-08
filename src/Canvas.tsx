@@ -1,4 +1,10 @@
-import { forwardRef, useMemo, type CSSProperties, type ReactNode } from 'react'
+import {
+  forwardRef,
+  useMemo,
+  Fragment,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import type { Doc, DiagEdge, Mode, Selection, Shape } from './types'
 import { GRID, center, anchor, halfExtents } from './geometry'
 import { GATES } from './gates'
@@ -6,8 +12,49 @@ import { GATES } from './gates'
 const LOOP_BASE = 30 // base bulge distance of a self-loop, in px
 const LOOP_W = 20 // half-width of the self-loop
 
-// Render LaTeX-style sub/superscript markup: q_0, x^2, a_{10}, m^{-1}.
-// Everything else is passed through unchanged.
+// Render a small LaTeX subset used for logic/boolean formatting:
+//   sub/superscript  q_0  x^2  a_{10}
+//   negation bar     \overline{A+B}  (\bar works too, nesting supported)
+//   operators        \cdot · \oplus ⊕ \lnot/\neg ¬ \lor/\vee ∨ \land/\wedge ∧
+// Anything else passes through unchanged.
+const OP: Record<string, string> = {
+  cdot: '·',
+  oplus: '⊕',
+  lnot: '¬',
+  neg: '¬',
+  lor: '∨',
+  vee: '∨',
+  land: '∧',
+  wedge: '∧',
+}
+
+const OVERBAR = '̅' // combining overline — draws a bar over the preceding glyph
+
+function opsToUnicode(s: string): string {
+  return s
+    .replace(/\\cdot/g, '·')
+    .replace(/\\oplus/g, '⊕')
+    .replace(/\\lnot/g, '¬')
+    .replace(/\\neg/g, '¬')
+    .replace(/\\lor/g, '∨')
+    .replace(/\\vee/g, '∨')
+    .replace(/\\land/g, '∧')
+    .replace(/\\wedge/g, '∧')
+}
+
+// Render a negated group as combining overlines — reliable in every browser
+// and in the PNG export, unlike text-decoration on a <tspan>.
+function overlineString(inner: string): string {
+  const flat = opsToUnicode(
+    inner.replace(/\\(?:overline|bar)\{([^{}]*)\}/g, (_, g) => overlineString(g)),
+  ).replace(/[{}]/g, '')
+  return Array.from(flat)
+    .map((c) => (c === OVERBAR ? c : c + OVERBAR))
+    .join('')
+}
+
+// Render a small LaTeX subset: sub/superscript, \overline / \bar negation
+// bars, and boolean operators. Braces group (and are invisible).
 function renderRich(s: string): ReactNode {
   const out: ReactNode[] = []
   let buf = ''
@@ -19,32 +66,79 @@ function renderRich(s: string): ReactNode {
       buf = ''
     }
   }
+  const readArg = (): string => {
+    if (s[i] === '{') {
+      i++
+      let depth = 1
+      const start = i
+      while (i < s.length && depth > 0) {
+        if (s[i] === '{') depth++
+        else if (s[i] === '}') {
+          depth--
+          if (depth === 0) break
+        }
+        i++
+      }
+      const inner = s.slice(start, i)
+      if (s[i] === '}') i++
+      return inner
+    }
+    return i < s.length ? s[i++] : ''
+  }
   while (i < s.length) {
     const ch = s[i]
+    if (ch === '\\') {
+      const m = /^\\(overline|bar|cdot|oplus|lnot|neg|lor|vee|land|wedge)/.exec(
+        s.slice(i),
+      )
+      if (m) {
+        const cmd = m[1]
+        i += m[0].length
+        if (cmd === 'overline' || cmd === 'bar') {
+          const inner = readArg()
+          if (/[_^]/.test(inner)) {
+            // sub/superscript inside a bar: fall back to text-decoration
+            flush()
+            out.push(
+              <tspan key={key++} style={{ textDecoration: 'overline' }}>
+                {renderRich(inner)}
+              </tspan>,
+            )
+          } else {
+            buf += overlineString(inner)
+          }
+        } else {
+          buf += OP[cmd]
+        }
+        continue
+      }
+      buf += ch
+      i++
+      continue
+    }
     if ((ch === '_' || ch === '^') && i + 1 < s.length) {
       flush()
       i++
-      let grp = ''
-      if (s[i] === '{') {
-        i++
-        while (i < s.length && s[i] !== '}') grp += s[i++]
-        if (s[i] === '}') i++
-      } else {
-        grp = s[i++]
-      }
+      const inner = readArg()
       out.push(
         <tspan
           key={key++}
           baselineShift={ch === '^' ? 'super' : 'sub'}
           fontSize="0.7em"
         >
-          {grp}
+          {renderRich(inner)}
         </tspan>,
       )
-    } else {
-      buf += ch
-      i++
+      continue
     }
+    if (ch === '{') {
+      // bare group — render its contents, braces are invisible
+      flush()
+      out.push(<Fragment key={key++}>{renderRich(readArg())}</Fragment>)
+      continue
+    }
+    buf += ch
+    i++
   }
   flush()
   return out
@@ -100,6 +194,8 @@ interface Props {
   onTextClick: (id: string) => void
   cellSel: { id: string; row: number; col: number } | null
   onCellClick: (id: string, row: number, col: number) => void
+  derivStep: number | null
+  onDerivRowClick: (id: string, index: number) => void
 }
 
 export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
@@ -121,6 +217,8 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     onTextClick,
     cellSel,
     onCellClick,
+    derivStep,
+    onDerivRowClick,
   },
   ref,
 ) {
@@ -134,7 +232,11 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
   // the grid — otherwise existing nodes/edges/lines would swallow the click and
   // you couldn't place, e.g., a dot on top of a line intersection.
   const placing =
-    mode === 'node' || mode === 'line' || mode === 'text' || mode === 'table'
+    mode === 'node' ||
+    mode === 'line' ||
+    mode === 'text' ||
+    mode === 'table' ||
+    mode === 'deriv'
   const hitProps = placing ? { pointerEvents: 'none' as const } : {}
 
   // grid line positions covering the visible view (world coordinates)
@@ -611,6 +713,58 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                   )
                 }),
               )}
+            </g>
+          )
+        })}
+      </g>
+
+      {/* boolean-algebra derivations (align* blocks) */}
+      <g>
+        {doc.derivations.map((d) => {
+          const dsel = selection?.kind === 'deriv' && selection.id === d.id
+          const relX = (d.x + 0.5) * GRID
+          const exprX = (d.x + 1) * GRID
+          const reasonX = (d.x + 1 + d.exprW) * GRID
+          return (
+            <g key={d.id}>
+              {dsel && (
+                <rect
+                  className="ui-only ring ring-sel"
+                  x={d.x * GRID - 4}
+                  y={d.y * GRID - 4}
+                  width={(1 + d.exprW + 6) * GRID + 8}
+                  height={d.steps.length * GRID + 8}
+                  fill="none"
+                />
+              )}
+              {d.steps.map((st, i) => {
+                const cy = (d.y + i + 0.5) * GRID
+                const rowSel = dsel && derivStep === i
+                return (
+                  <g key={i} {...hitProps} onClick={() => onDerivRowClick(d.id, i)}>
+                    <rect
+                      x={d.x * GRID}
+                      y={(d.y + i) * GRID}
+                      width={(1 + d.exprW + 6) * GRID}
+                      height={GRID}
+                      className={`deriv-row${rowSel ? ' selected' : ''}`}
+                    />
+                    {i > 0 && (
+                      <text x={relX} y={cy} className="deriv-rel">
+                        {renderRich(st.rel || '=')}
+                      </text>
+                    )}
+                    <text x={exprX} y={cy} className="deriv-expr">
+                      {renderRich(st.expr)}
+                    </text>
+                    {i > 0 && st.reason && (
+                      <text x={reasonX} y={cy} className="deriv-reason">
+                        {renderRich(`(${st.reason})`)}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
             </g>
           )
         })}

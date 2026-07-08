@@ -256,6 +256,36 @@ button.active kbd {
   font-weight: 600;
 }
 
+/* boolean-algebra derivation */
+.deriv-row {
+  fill: transparent;
+  cursor: pointer;
+}
+.deriv-row.selected {
+  fill: var(--accent-soft);
+}
+.deriv-rel {
+  font-size: calc(16px * var(--label-scale, 1));
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  fill: var(--ink);
+}
+.deriv-expr {
+  font-size: calc(16px * var(--label-scale, 1));
+  text-anchor: start;
+  dominant-baseline: central;
+  pointer-events: none;
+  fill: var(--ink);
+}
+.deriv-reason {
+  font-size: calc(13px * var(--label-scale, 1));
+  text-anchor: start;
+  dominant-baseline: central;
+  pointer-events: none;
+  fill: var(--muted);
+}
+
 /* free-standing text label */
 .free-text {
   font-size: calc(16px * var(--label-scale, 1));

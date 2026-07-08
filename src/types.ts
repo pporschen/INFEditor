@@ -77,6 +77,24 @@ export interface DiagTable {
   header: boolean // first row rendered as a header
   cells: string[][] // [row][col] contents (verbatim, may contain LaTeX)
   inputCols?: number // truth tables: how many left columns are inputs
+  math?: boolean // wrap cell contents in $…$ on LaTeX export
+}
+
+// One line of a boolean-algebra derivation. Row 0 is the initial expression
+// (its rel/reason are unused); later rows are "<rel> <expr>  (reason)".
+export interface DerivStep {
+  rel: string // relation to the previous line, e.g. '=' (LaTeX, no backslash for '=')
+  expr: string
+  reason: string
+}
+
+// A multi-line derivation → exports to a LaTeX align* block. Formatting only.
+export interface DiagDerivation {
+  id: string
+  x: number
+  y: number
+  exprW: number // width of the expression column, in grid cells
+  steps: DerivStep[]
 }
 
 export interface Doc {
@@ -85,9 +103,20 @@ export interface Doc {
   lines: DiagLine[]
   texts: DiagText[]
   tables: DiagTable[]
+  derivations: DiagDerivation[]
 }
 
-export type Mode = 'select' | 'node' | 'edge' | 'line' | 'text' | 'table' | 'delete'
+export type DerivField = 'rel' | 'expr' | 'reason'
+
+export type Mode =
+  | 'select'
+  | 'node'
+  | 'edge'
+  | 'line'
+  | 'text'
+  | 'table'
+  | 'deriv'
+  | 'delete'
 
 export type Selection =
   | { kind: 'node'; id: string }
@@ -95,4 +124,5 @@ export type Selection =
   | { kind: 'line'; id: string }
   | { kind: 'text'; id: string }
   | { kind: 'table'; id: string }
+  | { kind: 'deriv'; id: string }
   | null

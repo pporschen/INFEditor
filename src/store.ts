@@ -3,6 +3,8 @@ import type {
   Doc,
   DiagNode,
   DiagTable,
+  DiagDerivation,
+  DerivField,
   Shape,
   RelType,
   GateType,
@@ -42,9 +44,17 @@ export type Action =
   | { type: 'TABLE_COLS'; id: string; delta: number }
   | { type: 'TABLE_WIDTH'; id: string; delta: number }
   | { type: 'TOGGLE_TABLE_HEADER'; id: string }
+  | { type: 'TOGGLE_TABLE_MATH'; id: string }
   | { type: 'FILL_TABLE_INPUTS'; id: string }
   | { type: 'MOVE_TABLE'; id: string; x: number; y: number }
   | { type: 'DELETE_TABLE'; id: string }
+  | { type: 'ADD_DERIV'; derivation: DiagDerivation }
+  | { type: 'SET_DERIV'; id: string; index: number; field: DerivField; value: string }
+  | { type: 'ADD_DERIV_STEP'; id: string; after: number }
+  | { type: 'DEL_DERIV_STEP'; id: string; index: number }
+  | { type: 'DERIV_WIDTH'; id: string; delta: number }
+  | { type: 'MOVE_DERIV'; id: string; x: number; y: number }
+  | { type: 'DELETE_DERIV'; id: string }
   | { type: 'SET_NODE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_LABEL'; id: string; label: string }
   | { type: 'SET_EDGE_CURVE'; id: string; curve: number }
@@ -307,6 +317,13 @@ function docReducer(doc: Doc, a: Action): Doc {
           t.id === a.id ? { ...t, header: !t.header } : t,
         ),
       }
+    case 'TOGGLE_TABLE_MATH':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) =>
+          t.id === a.id ? { ...t, math: !t.math } : t,
+        ),
+      }
     case 'FILL_TABLE_INPUTS':
       return {
         ...doc,
@@ -333,8 +350,58 @@ function docReducer(doc: Doc, a: Action): Doc {
       }
     case 'DELETE_TABLE':
       return { ...doc, tables: doc.tables.filter((t) => t.id !== a.id) }
+    case 'ADD_DERIV':
+      return { ...doc, derivations: [...doc.derivations, a.derivation] }
+    case 'SET_DERIV':
+      return {
+        ...doc,
+        derivations: doc.derivations.map((d) =>
+          d.id === a.id
+            ? {
+                ...d,
+                steps: d.steps.map((s, i) =>
+                  i === a.index ? { ...s, [a.field]: a.value } : s,
+                ),
+              }
+            : d,
+        ),
+      }
+    case 'ADD_DERIV_STEP':
+      return {
+        ...doc,
+        derivations: doc.derivations.map((d) => {
+          if (d.id !== a.id) return d
+          const steps = d.steps.slice()
+          steps.splice(a.after + 1, 0, { rel: '=', expr: '', reason: '' })
+          return { ...d, steps }
+        }),
+      }
+    case 'DEL_DERIV_STEP':
+      return {
+        ...doc,
+        derivations: doc.derivations.map((d) => {
+          if (d.id !== a.id || d.steps.length <= 1) return d
+          return { ...d, steps: d.steps.filter((_, i) => i !== a.index) }
+        }),
+      }
+    case 'DERIV_WIDTH':
+      return {
+        ...doc,
+        derivations: doc.derivations.map((d) =>
+          d.id === a.id ? { ...d, exprW: Math.max(2, d.exprW + a.delta) } : d,
+        ),
+      }
+    case 'MOVE_DERIV':
+      return {
+        ...doc,
+        derivations: doc.derivations.map((d) =>
+          d.id === a.id ? { ...d, x: a.x, y: a.y } : d,
+        ),
+      }
+    case 'DELETE_DERIV':
+      return { ...doc, derivations: doc.derivations.filter((d) => d.id !== a.id) }
     case 'CLEAR':
-      return { nodes: [], edges: [], lines: [], texts: [], tables: [] }
+      return { nodes: [], edges: [], lines: [], texts: [], tables: [], derivations: [] }
     default:
       return doc
   }

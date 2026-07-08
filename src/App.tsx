@@ -5,10 +5,11 @@ import { useEditor } from './store'
 import { exportPng } from './exportPng'
 import { GATES, GATE_ORDER } from './gates'
 import { GRID, W, H } from './geometry'
-import { tableToLatex } from './latex'
+import { tableToLatex, derivToLatex } from './latex'
 import type {
   Doc,
   DiagTable,
+  DerivField,
   LabelPos,
   LineArrow,
   Mode,
@@ -24,6 +25,22 @@ const LOOP_SIZE_MIN = -18 // clamp for self-loop extra size (keeps a visible loo
 const LOOP_SIZE_MAX = 160
 const LOOP_ANGLE_STEP = 30 // degrees the loop rotates per button press
 const LINE_STEP = 1 / 4 // 1/4 of a grid cell — nudge/resize step for wires
+
+// Auto-convert typed operator words to LaTeX. Whole-word only; results
+// (\land, \overline{…}) can't re-match, so it's idempotent. `not X` becomes
+// \overline{X}. With atEnd=false the operand must be followed by a space (so
+// the full token is captured); atEnd=true also converts a trailing operand.
+function boolConvert(s: string, atEnd: boolean): string {
+  const notEnd = atEnd ? '(?=\\s|$)' : '(?=\\s)'
+  return s
+    .replace(/\bnand\b/g, '\\overline{\\land} ')
+    .replace(/\bnor\b/g, '\\overline{\\lor} ')
+    .replace(/\bxnor\b/g, '\\overline{\\oplus} ')
+    .replace(/\bxor\b/g, '\\oplus ')
+    .replace(/\band\b/g, '\\land ')
+    .replace(/\bor\b/g, '\\lor ')
+    .replace(new RegExp('\\bnot\\s+(\\([^)]*\\)|\\S+)' + notEnd, 'g'), '\\overline{$1}')
+}
 const ZOOM_MIN = W * 0.25 // most zoomed-in (smallest viewBox)
 const ZOOM_MAX = W * 8 // most zoomed-out (largest viewBox)
 
@@ -52,12 +69,13 @@ function loadInitial(): Doc {
         lines: d.lines ?? [],
         texts: d.texts ?? [],
         tables: d.tables ?? [],
+        derivations: d.derivations ?? [],
       }
     }
   } catch {
     /* ignore corrupt autosave */
   }
-  return { nodes: [], edges: [], lines: [], texts: [], tables: [] }
+  return { nodes: [], edges: [], lines: [], texts: [], tables: [], derivations: [] }
 }
 
 // Build a fresh table. `inputCols > 0` makes a truth-table shell (n inputs +
@@ -100,6 +118,8 @@ export default function App() {
     row: number
     col: number
   } | null>(null)
+  const [derivStep, setDerivStep] = useState<number | null>(null)
+  const [derivField, setDerivField] = useState<DerivField>('expr')
   const svgRef = useRef<SVGSVGElement>(null)
   const labelInputRef = useRef<HTMLInputElement>(null)
   const focusLabelRef = useRef(false) // request to focus the label after box creation
@@ -152,6 +172,22 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cellSel, aspect])
 
+  // Same for the derivation line being edited: keep it in the top ~half so the
+  // gaze keyboard doesn't cover it.
+  useEffect(() => {
+    if (derivStep == null || selection?.kind !== 'deriv') return
+    const d = doc.derivations.find((x) => x.id === selection.id)
+    if (!d) return
+    const lineY = (d.y + derivStep + 0.5) * GRID
+    setView((v) => {
+      const h = v.w * aspect
+      const relY = (lineY - v.y) / h
+      if (relY < 0.05 || relY > 0.45) return { ...v, y: lineY - h * 0.3 }
+      return v
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivStep, selection, aspect])
+
   // after a box is created we select it and focus its label input for typing
   useEffect(() => {
     if (focusLabelRef.current && labelInputRef.current) {
@@ -181,6 +217,10 @@ export default function App() {
   const selectedTable =
     selection?.kind === 'table'
       ? doc.tables.find((t) => t.id === selection.id) ?? null
+      : null
+  const selectedDeriv =
+    selection?.kind === 'deriv'
+      ? doc.derivations.find((d) => d.id === selection.id) ?? null
       : null
 
   const changeMode = useCallback((m: Mode) => {
@@ -316,6 +356,24 @@ export default function App() {
           setCellSel(null)
         }
       }
+    } else if (mode === 'deriv') {
+      const id = crypto.randomUUID()
+      dispatch({
+        type: 'ADD_DERIV',
+        derivation: {
+          id,
+          x: gx,
+          y: gy,
+          exprW: 8,
+          steps: [{ rel: '=', expr: '', reason: '' }],
+        },
+      })
+      returnModeRef.current = 'deriv'
+      setMode('select')
+      setSelection({ kind: 'deriv', id })
+      setDerivStep(0)
+      setDerivField('expr')
+      focusLabelRef.current = true
     } else if (mode === 'select' && selection?.kind === 'node') {
       dispatch({ type: 'MOVE_NODE', id: selection.id, x: gx, y: gy })
     } else if (mode === 'select' && selection?.kind === 'text') {
@@ -324,6 +382,8 @@ export default function App() {
       // clicking empty space moves the table by its top-left corner
       dispatch({ type: 'MOVE_TABLE', id: selection.id, x: gx, y: gy })
       setCellSel(null)
+    } else if (mode === 'select' && selection?.kind === 'deriv') {
+      dispatch({ type: 'MOVE_DERIV', id: selection.id, x: gx, y: gy })
     } else if (mode === 'edge') {
       setPendingFrom(null)
     }
@@ -368,6 +428,22 @@ export default function App() {
       setSelection({ kind: 'table', id })
       setCellSel({ id, row, col })
       focusLabelRef.current = true // focus the cell input
+    }
+  }
+
+  function handleDerivRowClick(id: string, index: number) {
+    if (mode === 'delete') {
+      dispatch({ type: 'DELETE_DERIV', id })
+      setSelection(null)
+      setDerivStep(null)
+      return
+    }
+    if (mode === 'select') {
+      returnModeRef.current = null
+      setSelection({ kind: 'deriv', id })
+      setDerivStep(index)
+      setDerivField('expr')
+      focusLabelRef.current = true
     }
   }
 
@@ -478,24 +554,79 @@ export default function App() {
     else if (selection?.kind === 'line') dispatch({ type: 'SET_LINE_LABEL', id: selection.id, label: text })
     else if (selection?.kind === 'table' && cellSel)
       dispatch({ type: 'SET_TABLE_CELL', id: cellSel.id, row: cellSel.row, col: cellSel.col, text })
+    else if (selection?.kind === 'deriv' && derivStep != null)
+      dispatch({ type: 'SET_DERIV', id: selection.id, index: derivStep, field: derivField, value: text })
   }
 
-  // Insert sub/superscript markup (_{}/^{}) into the focused label field,
-  // wrapping any selected text and placing the caret inside the braces.
-  function insertScript(kind: 'sup' | 'sub') {
-    const el = labelInputRef.current
+  // The label input currently focused (palette buttons keep focus via
+  // onMouseDown preventDefault, so this stays the field being edited).
+  function activeInput(): HTMLInputElement | null {
+    const el = document.activeElement
+    return el instanceof HTMLInputElement ? el : labelInputRef.current
+  }
+
+  // Wrap the selection with pre/post, caret left just before `post`.
+  function insertWrap(pre: string, post: string) {
+    const el = activeInput()
     if (!el) return
-    const sym = kind === 'sup' ? '^' : '_'
     const start = el.selectionStart ?? el.value.length
     const end = el.selectionEnd ?? start
     const inner = el.value.slice(start, end)
-    const next = el.value.slice(0, start) + `${sym}{${inner}}` + el.value.slice(end)
+    const next = el.value.slice(0, start) + pre + inner + post + el.value.slice(end)
     setActiveLabel(next)
-    const caret = start + 2 + inner.length // just before the closing brace
+    const caret = start + pre.length + inner.length
     requestAnimationFrame(() => {
       el.focus()
       el.setSelectionRange(caret, caret)
     })
+  }
+
+  // Insert literal text at the caret.
+  function insertText(str: string) {
+    const el = activeInput()
+    if (!el) return
+    const start = el.selectionStart ?? el.value.length
+    const end = el.selectionEnd ?? start
+    const next = el.value.slice(0, start) + str + el.value.slice(end)
+    setActiveLabel(next)
+    const caret = start + str.length
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(caret, caret)
+    })
+  }
+
+  // Convert a trailing operand (no space yet) when leaving/advancing the field.
+  function finalizeDeriv() {
+    if (!selectedDeriv || derivStep == null) return
+    const cur = selectedDeriv.steps[derivStep]?.expr ?? ''
+    const fin = boolConvert(cur, true)
+    if (fin !== cur)
+      dispatch({ type: 'SET_DERIV', id: selectedDeriv.id, index: derivStep, field: 'expr', value: fin })
+  }
+
+  // Append a derivation step after the current one and focus its expression.
+  function addStep() {
+    if (!selectedDeriv || derivStep == null) return
+    finalizeDeriv()
+    const idx = derivStep
+    dispatch({ type: 'ADD_DERIV_STEP', id: selectedDeriv.id, after: idx })
+    setDerivStep(idx + 1)
+    setDerivField('expr')
+    setSelection({ kind: 'deriv', id: selectedDeriv.id }) // force the focus effect
+    focusLabelRef.current = true
+  }
+
+  // Enter adds the next derivation line; Escape leaves.
+  function handleDerivKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') {
+      e.currentTarget.blur()
+      setSelection(null)
+      setDerivStep(null)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      addStep()
+    }
   }
 
   // Spreadsheet-style navigation while editing a table cell.
@@ -582,6 +713,9 @@ export default function App() {
         case 'b':
           changeMode('table')
           break
+        case 'r':
+          changeMode('deriv')
+          break
         case 'd':
           changeMode('delete')
           break
@@ -603,8 +737,11 @@ export default function App() {
             dispatch({ type: 'DELETE_TEXT', id: selection.id })
           else if (selection?.kind === 'table')
             dispatch({ type: 'DELETE_TABLE', id: selection.id })
+          else if (selection?.kind === 'deriv')
+            dispatch({ type: 'DELETE_DERIV', id: selection.id })
           setSelection(null)
           setCellSel(null)
+          setDerivStep(null)
           break
       }
     }
@@ -655,6 +792,12 @@ export default function App() {
               onClick={() => changeMode('table')}
             >
               Table <kbd>b</kbd>
+            </button>
+            <button
+              className={mode === 'deriv' ? 'active' : ''}
+              onClick={() => changeMode('deriv')}
+            >
+              Deriv. <kbd>r</kbd>
             </button>
             <button
               className={mode === 'delete' ? 'active danger' : 'danger'}
@@ -840,6 +983,8 @@ export default function App() {
               ? 'Now dwell on the end point of the wire.'
               : 'Dwell on the start point of the wire. After drawing, use the buttons to nudge it by 1/4 cell.')}
           {mode === 'text' && 'Dwell anywhere to drop a text label, then type it.'}
+          {mode === 'deriv' &&
+            'Dwell to start a derivation, then type each line and reason. You do the algebra; it makes the LaTeX.'}
           {mode === 'table' &&
             tablePreset > 0 &&
             'Dwell to place the truth-table shell, then click a cell to edit. You fill every value.'}
@@ -874,6 +1019,8 @@ export default function App() {
           onTextClick={handleTextClick}
           cellSel={cellSel}
           onCellClick={handleCellClick}
+          derivStep={derivStep}
+          onDerivRowClick={handleDerivRowClick}
         />
       </main>
 
@@ -1178,12 +1325,21 @@ export default function App() {
                 +
               </button>
             </div>
-            <button
-              className={selectedTable.header ? 'active' : ''}
-              onClick={() => dispatch({ type: 'TOGGLE_TABLE_HEADER', id: selectedTable.id })}
-            >
-              Header row
-            </button>
+            <div className="btn-grid">
+              <button
+                className={selectedTable.header ? 'active' : ''}
+                onClick={() => dispatch({ type: 'TOGGLE_TABLE_HEADER', id: selectedTable.id })}
+              >
+                Header row
+              </button>
+              <button
+                className={selectedTable.math ? 'active' : ''}
+                onClick={() => dispatch({ type: 'TOGGLE_TABLE_MATH', id: selectedTable.id })}
+                title="Wrap each cell in $…$ so \overline{} etc. compile"
+              >
+                Math $…$
+              </button>
+            </div>
             {selectedTable.inputCols && (
               <button
                 onClick={() => dispatch({ type: 'FILL_TABLE_INPUTS', id: selectedTable.id })}
@@ -1200,24 +1356,138 @@ export default function App() {
             <p className="muted">Click a cell to edit; dwell empty space to move the table.</p>
           </>
         )}
+        {selectedDeriv && derivStep != null && selectedDeriv.steps[derivStep] && (
+          <>
+            <span className="group-title">
+              Line {derivStep + 1}
+              {derivStep === 0 ? ' (start)' : ''}
+            </span>
+            {derivStep > 0 && (
+              <label>
+                Relation
+                <input
+                  value={selectedDeriv.steps[derivStep].rel}
+                  onFocus={() => setDerivField('rel')}
+                  onChange={(e) =>
+                    dispatch({ type: 'SET_DERIV', id: selectedDeriv.id, index: derivStep, field: 'rel', value: e.target.value })
+                  }
+                  onKeyDown={handleDerivKey}
+                />
+              </label>
+            )}
+            <label>
+              Expression
+              <input
+                ref={labelInputRef}
+                value={selectedDeriv.steps[derivStep].expr}
+                onFocus={() => setDerivField('expr')}
+                onChange={(e) =>
+                  dispatch({ type: 'SET_DERIV', id: selectedDeriv.id, index: derivStep, field: 'expr', value: boolConvert(e.target.value, false) })
+                }
+                onBlur={finalizeDeriv}
+                onKeyDown={handleDerivKey}
+                autoFocus
+              />
+            </label>
+            {derivStep > 0 && (
+              <label>
+                Reason
+                <input
+                  value={selectedDeriv.steps[derivStep].reason}
+                  onFocus={() => setDerivField('reason')}
+                  onChange={(e) =>
+                    dispatch({ type: 'SET_DERIV', id: selectedDeriv.id, index: derivStep, field: 'reason', value: e.target.value })
+                  }
+                  onKeyDown={handleDerivKey}
+                />
+              </label>
+            )}
+            <div className="btn-grid">
+              <button onClick={addStep}>Add line ⏎</button>
+              <button
+                className="danger"
+                onClick={() => {
+                  dispatch({ type: 'DEL_DERIV_STEP', id: selectedDeriv.id, index: derivStep })
+                  setDerivStep(Math.max(0, derivStep - 1))
+                }}
+              >
+                Del line
+              </button>
+              <button onClick={() => dispatch({ type: 'DERIV_WIDTH', id: selectedDeriv.id, delta: -1 })}>
+                Narrower
+              </button>
+              <button onClick={() => dispatch({ type: 'DERIV_WIDTH', id: selectedDeriv.id, delta: 1 })}>
+                Wider
+              </button>
+            </div>
+            <span className="group-title">LaTeX (align*)</span>
+            <textarea className="latex-out" readOnly rows={6} value={derivToLatex(selectedDeriv)} />
+            <button onClick={() => navigator.clipboard?.writeText(derivToLatex(selectedDeriv))}>
+              Copy LaTeX
+            </button>
+          </>
+        )}
         {((selectedNode && selectedNode.shape !== 'dot') ||
           selectedEdge ||
           selectedText ||
           selectedLineId ||
-          (selectedTable && cellSel)) && (
+          (selectedTable && cellSel) ||
+          (selectedDeriv && derivStep != null)) && (
           <>
             <span className="group-title">Insert</span>
-            <div className="curve-row">
+            <div className="btn-grid">
               <button
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => insertScript('sup')}
+                onClick={() => insertWrap('\\overline{', '}')}
+                title="Negation bar  \overline{ }"
+              >
+                A̅ NOT
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertText('\\cdot ')}
+                title="AND  \cdot"
+              >
+                · AND
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertText('+')}
+                title="OR  +"
+              >
+                + OR
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertText('\\oplus ')}
+                title="XOR  \oplus"
+              >
+                ⊕ XOR
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertText('(')}
+                title="Open paren"
+              >
+                (
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertText(')')}
+                title="Close paren"
+              >
+                )
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertWrap('^{', '}')}
                 title="Superscript  ^{ }"
               >
                 x²
               </button>
               <button
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => insertScript('sub')}
+                onClick={() => insertWrap('_{', '}')}
                 title="Subscript  _{ }"
               >
                 x₂
