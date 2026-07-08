@@ -32,6 +32,8 @@ const OVERBAR = '̅' // combining overline — draws a bar over the preceding gl
 
 function opsToUnicode(s: string): string {
   return s
+    .replace(/\\left\.?/g, '')
+    .replace(/\\right\.?/g, '')
     .replace(/\\cdot/g, '·')
     .replace(/\\oplus/g, '⊕')
     .replace(/\\lnot/g, '¬')
@@ -88,9 +90,10 @@ function renderRich(s: string): ReactNode {
   while (i < s.length) {
     const ch = s[i]
     if (ch === '\\') {
-      const m = /^\\(overline|bar|cdot|oplus|lnot|neg|lor|vee|land|wedge)/.exec(
-        s.slice(i),
-      )
+      const m =
+        /^\\(overline|bar|cdot|oplus|lnot|neg|lor|vee|land|wedge|left|right)/.exec(
+          s.slice(i),
+        )
       if (m) {
         const cmd = m[1]
         i += m[0].length
@@ -107,6 +110,9 @@ function renderRich(s: string): ReactNode {
           } else {
             buf += overlineString(inner)
           }
+        } else if (cmd === 'left' || cmd === 'right') {
+          // delimiter sizing hint — keep the bracket, drop an invisible '.'
+          if (s[i] === '.') i++
         } else {
           buf += OP[cmd]
         }
