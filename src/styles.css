@@ -165,6 +165,21 @@ button.active kbd {
   stroke: var(--grid-line);
   stroke-width: 1;
 }
+
+/* A4 page frame + printable-margin guide */
+.page-frame {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  opacity: 0.7;
+}
+.page-margin {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 6 5;
+  opacity: 0.4;
+}
 .grid-minor {
   stroke: var(--grid-line);
   stroke-width: 1;
@@ -441,24 +456,51 @@ button.done:hover:not(:disabled) {
   border-color: #15803d;
 }
 
+/* A4 print pipeline: printA4() builds a .print-root of one .print-page per
+   sheet; only that is shown when printing. */
+.print-root {
+  display: none;
+}
 @media print {
-  /* print/PDF always uses a clean light palette, like the PNG export */
+  /* print always renders the light palette (dark ink on white) */
   :root {
     --canvas-bg: #ffffff;
     --node-fill: #ffffff;
     --stroke: #1d2433;
     --ink: #1d2433;
-    --grid-line: #e3e8f0;
+    --muted: #555555;
+    --btn: #f0f2f7;
   }
-  .toolbar,
-  .inspector {
-    display: none;
+  @page {
+    size: A4 portrait;
+    margin: 0;
   }
-  .app {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+  body > *:not(.print-root) {
+    display: none !important;
+  }
+  .print-root {
     display: block;
   }
-  .canvas {
-    border: none;
-    box-shadow: none;
+  .print-page {
+    width: 210mm;
+    height: 297mm;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .print-page svg {
+    display: block;
+    width: 210mm;
+    height: 297mm;
   }
 }

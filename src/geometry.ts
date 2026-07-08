@@ -7,6 +7,15 @@ export const ROWS = 16
 export const W = COLS * GRID
 export const H = ROWS * GRID
 
+// A4 portrait page, calibrated so 21 cells = 210 mm (i.e. 1 cell = 1 cm).
+export const PAGE_W = 21 * GRID // 210 mm
+export const PAGE_H = 29.7 * GRID // 297 mm
+export const PAGE_MARGIN = 2 * GRID // 20 mm printable margin guide
+export const PAGE_GAP = Math.round(0.6 * GRID) // visual gap between stacked pages
+export function pageTop(i: number): number {
+  return i * (PAGE_H + PAGE_GAP)
+}
+
 export const R = 20 // circle node radius
 export const BW = 76 // box width
 export const BH = 44 // box height

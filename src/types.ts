@@ -104,6 +104,7 @@ export interface Doc {
   texts: DiagText[]
   tables: DiagTable[]
   derivations: DiagDerivation[]
+  pages: number // number of stacked A4 pages
 }
 
 export type DerivField = 'rel' | 'expr' | 'reason'

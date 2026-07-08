@@ -3,8 +3,9 @@ import { Canvas } from './Canvas'
 import type { View } from './Canvas'
 import { useEditor } from './store'
 import { exportPng } from './exportPng'
+import { printA4 } from './printA4'
 import { GATES, GATE_ORDER } from './gates'
-import { GRID, W, H } from './geometry'
+import { GRID, W, H, PAGE_W } from './geometry'
 import { tableToLatex, derivToLatex } from './latex'
 import type {
   Doc,
@@ -70,12 +71,21 @@ function loadInitial(): Doc {
         texts: d.texts ?? [],
         tables: d.tables ?? [],
         derivations: d.derivations ?? [],
+        pages: d.pages ?? 1,
       }
     }
   } catch {
     /* ignore corrupt autosave */
   }
-  return { nodes: [], edges: [], lines: [], texts: [], tables: [], derivations: [] }
+  return {
+    nodes: [],
+    edges: [],
+    lines: [],
+    texts: [],
+    tables: [],
+    derivations: [],
+    pages: 1,
+  }
 }
 
 // Build a fresh table. `inputCols > 0` makes a truth-table shell (n inputs +
@@ -109,7 +119,7 @@ export default function App() {
     null,
   )
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null)
-  const [view, setView] = useState({ x: 0, y: 0, w: W })
+  const [view, setView] = useState({ x: -GRID, y: -GRID, w: PAGE_W + 2 * GRID })
   const [aspect, setAspect] = useState(H / W) // canvas height/width, keeps the grid full-bleed
   const [labelScale, setLabelScale] = useState(1.4)
   const [tablePreset, setTablePreset] = useState(0) // 0 = blank, n = truth table with n inputs
@@ -248,7 +258,7 @@ export default function App() {
   }
 
   function resetView() {
-    setView({ x: 0, y: 0, w: W })
+    setView({ x: -GRID, y: -GRID, w: PAGE_W + 2 * GRID })
   }
 
   function handleBgClick(gx: number, gy: number) {
@@ -952,13 +962,28 @@ export default function App() {
         </div>
 
         <div className="group">
-          <span className="group-title">Export</span>
+          <span className="group-title">A4 pages: {doc.pages}</span>
           <div className="btn-grid">
-            <button onClick={() => svgRef.current && exportPng(svgRef.current)}>
-              PNG
+            <button onClick={() => dispatch({ type: 'SET_PAGES', count: doc.pages + 1 })}>
+              Add page
             </button>
-            <button onClick={() => window.print()}>PDF</button>
+            <button
+              disabled={doc.pages <= 1}
+              onClick={() => dispatch({ type: 'SET_PAGES', count: doc.pages - 1 })}
+            >
+              Remove
+            </button>
           </div>
+        </div>
+
+        <div className="group">
+          <span className="group-title">Export</span>
+          <button onClick={() => svgRef.current && printA4(svgRef.current, doc.pages)}>
+            Print A4 → PDF
+          </button>
+          <button onClick={() => svgRef.current && exportPng(svgRef.current)}>
+            PNG (all content)
+          </button>
         </div>
 
         <div className="hint">

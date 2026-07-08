@@ -6,7 +6,16 @@ import {
   type ReactNode,
 } from 'react'
 import type { Doc, DiagEdge, Mode, Selection, Shape } from './types'
-import { GRID, center, anchor, halfExtents } from './geometry'
+import {
+  GRID,
+  center,
+  anchor,
+  halfExtents,
+  PAGE_W,
+  PAGE_H,
+  PAGE_MARGIN,
+  pageTop,
+} from './geometry'
 import { GATES } from './gates'
 
 const LOOP_BASE = 30 // base bulge distance of a self-loop, in px
@@ -417,6 +426,25 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
             className="grid-line"
           />
         ))}
+      </g>
+
+      {/* A4 page frames + printable-margin guides (kept OUT of #content) */}
+      <g pointerEvents="none">
+        {Array.from({ length: doc.pages }).map((_, i) => {
+          const top = pageTop(i)
+          return (
+            <g key={`page-${i}`}>
+              <rect x={0} y={top} width={PAGE_W} height={PAGE_H} className="page-frame" />
+              <rect
+                x={PAGE_MARGIN}
+                y={top + PAGE_MARGIN}
+                width={PAGE_W - 2 * PAGE_MARGIN}
+                height={PAGE_H - 2 * PAGE_MARGIN}
+                className="page-margin"
+              />
+            </g>
+          )
+        })}
       </g>
 
       {/* all diagram content (measured by exportPng via getBBox) */}

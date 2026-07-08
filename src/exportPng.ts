@@ -15,9 +15,89 @@ const LIGHT = {
   grid: '#e3e8f0',
 }
 
-function setStyle(root: SVGSVGElement, selector: string, attrs: Record<string, string>) {
+function setStyle(root: Element, selector: string, attrs: Record<string, string>) {
   root.querySelectorAll(selector).forEach((el) => {
     for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v)
+  })
+}
+
+export const LIGHT_BG = LIGHT.bg
+
+// Bake the light palette onto a clone (or content group) as presentation
+// attributes, since exported/printed SVG doesn't get the stylesheet. Shared by
+// PNG export and A4 print. `ls` is the label scale to fold into font sizes.
+export function applyLightStyles(root: Element, ls: number) {
+  setStyle(root, '.canvas-bg', { fill: LIGHT.bg })
+  setStyle(root, '.arrow-head', { fill: LIGHT.stroke })
+  setStyle(root, '.uml-fill', { fill: LIGHT.stroke })
+  setStyle(root, '.uml-hollow', { fill: LIGHT.bg, stroke: LIGHT.stroke, 'stroke-width': '1.5' })
+  setStyle(root, '.uml-open', { fill: 'none', stroke: LIGHT.stroke, 'stroke-width': '1.5' })
+  setStyle(root, '.node-fill', { fill: LIGHT.nodeFill, stroke: LIGHT.stroke, 'stroke-width': '2' })
+  setStyle(root, '.node-inner', { stroke: LIGHT.stroke, 'stroke-width': '2', fill: 'none' })
+  setStyle(root, '.gate-sym', {
+    fill: LIGHT.ink,
+    'font-size': String(22 * ls),
+    'font-weight': '600',
+    'text-anchor': 'middle',
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
+  setStyle(root, '.gate-bubble', { fill: LIGHT.nodeFill, stroke: LIGHT.stroke, 'stroke-width': '2' })
+  setStyle(root, '.dot-fill', { fill: LIGHT.stroke })
+  setStyle(root, '.free-text', {
+    fill: LIGHT.ink,
+    'font-size': String(16 * ls),
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
+  setStyle(root, '.table-cell', { fill: LIGHT.bg, stroke: LIGHT.stroke, 'stroke-width': '1.5' })
+  setStyle(root, '.table-cell.table-header', { fill: '#f0f2f7' })
+  setStyle(root, '.table-text', {
+    fill: LIGHT.ink,
+    'font-size': String(15 * ls),
+    'text-anchor': 'middle',
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
+  setStyle(root, '.table-header-text', { 'font-weight': '600' })
+  setStyle(root, '.deriv-rel', {
+    fill: LIGHT.ink,
+    'font-size': String(16 * ls),
+    'text-anchor': 'middle',
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
+  setStyle(root, '.deriv-expr', {
+    fill: LIGHT.ink,
+    'font-size': String(16 * ls),
+    'text-anchor': 'start',
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
+  setStyle(root, '.deriv-reason', {
+    fill: '#555',
+    'font-size': String(13 * ls),
+    'text-anchor': 'start',
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
+  setStyle(root, '.edge-line', { stroke: LIGHT.stroke, 'stroke-width': '2', fill: 'none' })
+  setStyle(root, '.node-label', {
+    fill: LIGHT.ink,
+    'font-size': String(16 * ls),
+    'text-anchor': 'middle',
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
+  setStyle(root, '.edge-label', {
+    fill: LIGHT.ink,
+    'font-size': String(15 * ls),
+    'text-anchor': 'middle',
+    'paint-order': 'stroke',
+    stroke: LIGHT.bg,
+    'stroke-width': '4',
+    'stroke-linejoin': 'round',
+    'font-family': 'sans-serif',
   })
 }
 
@@ -60,99 +140,7 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
     bg.setAttribute('height', String(box.h))
   }
 
-  // bake the light palette onto the elements
-  setStyle(clone, '.canvas-bg', { fill: LIGHT.bg })
-  setStyle(clone, '.arrow-head', { fill: LIGHT.stroke })
-  setStyle(clone, '.uml-fill', { fill: LIGHT.stroke })
-  setStyle(clone, '.uml-hollow', {
-    fill: LIGHT.bg,
-    stroke: LIGHT.stroke,
-    'stroke-width': '1.5',
-  })
-  setStyle(clone, '.uml-open', {
-    fill: 'none',
-    stroke: LIGHT.stroke,
-    'stroke-width': '1.5',
-  })
-  setStyle(clone, '.node-fill', {
-    fill: LIGHT.nodeFill,
-    stroke: LIGHT.stroke,
-    'stroke-width': '2',
-  })
-  setStyle(clone, '.node-inner', { stroke: LIGHT.stroke, 'stroke-width': '2', fill: 'none' })
-  setStyle(clone, '.gate-sym', {
-    fill: LIGHT.ink,
-    'font-size': String(22 * ls),
-    'font-weight': '600',
-    'text-anchor': 'middle',
-    'dominant-baseline': 'central',
-    'font-family': 'sans-serif',
-  })
-  setStyle(clone, '.gate-bubble', {
-    fill: LIGHT.nodeFill,
-    stroke: LIGHT.stroke,
-    'stroke-width': '2',
-  })
-  setStyle(clone, '.dot-fill', { fill: LIGHT.stroke })
-  setStyle(clone, '.free-text', {
-    fill: LIGHT.ink,
-    'font-size': String(16 * ls),
-    'dominant-baseline': 'central',
-    'font-family': 'sans-serif',
-  })
-  setStyle(clone, '.table-cell', {
-    fill: LIGHT.bg,
-    stroke: LIGHT.stroke,
-    'stroke-width': '1.5',
-  })
-  setStyle(clone, '.table-cell.table-header', { fill: '#f0f2f7' })
-  setStyle(clone, '.table-text', {
-    fill: LIGHT.ink,
-    'font-size': String(15 * ls),
-    'text-anchor': 'middle',
-    'dominant-baseline': 'central',
-    'font-family': 'sans-serif',
-  })
-  setStyle(clone, '.table-header-text', { 'font-weight': '600' })
-  setStyle(clone, '.deriv-rel', {
-    fill: LIGHT.ink,
-    'font-size': String(16 * ls),
-    'text-anchor': 'middle',
-    'dominant-baseline': 'central',
-    'font-family': 'sans-serif',
-  })
-  setStyle(clone, '.deriv-expr', {
-    fill: LIGHT.ink,
-    'font-size': String(16 * ls),
-    'text-anchor': 'start',
-    'dominant-baseline': 'central',
-    'font-family': 'sans-serif',
-  })
-  setStyle(clone, '.deriv-reason', {
-    fill: '#555',
-    'font-size': String(13 * ls),
-    'text-anchor': 'start',
-    'dominant-baseline': 'central',
-    'font-family': 'sans-serif',
-  })
-  setStyle(clone, '.edge-line', { stroke: LIGHT.stroke, 'stroke-width': '2', fill: 'none' })
-  setStyle(clone, '.node-label', {
-    fill: LIGHT.ink,
-    'font-size': String(16 * ls),
-    'text-anchor': 'middle',
-    'dominant-baseline': 'central',
-    'font-family': 'sans-serif',
-  })
-  setStyle(clone, '.edge-label', {
-    fill: LIGHT.ink,
-    'font-size': String(15 * ls),
-    'text-anchor': 'middle',
-    'paint-order': 'stroke',
-    stroke: LIGHT.bg,
-    'stroke-width': '4',
-    'stroke-linejoin': 'round',
-    'font-family': 'sans-serif',
-  })
+  applyLightStyles(clone, ls)
 
   const data = new XMLSerializer().serializeToString(clone)
   const svgBlob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' })
