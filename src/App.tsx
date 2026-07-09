@@ -26,7 +26,11 @@ const LOOP_SIZE_MIN = -18 // clamp for self-loop extra size (keeps a visible loo
 const LOOP_SIZE_MAX = 160
 const LOOP_ANGLE_STEP = 30 // degrees the loop rotates per button press
 const LINE_STEP = 1 / 4 // 1/4 of a grid cell — nudge/resize step for wires
-const LOOP_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#14b8a6', '#ec4899', '#84cc16']
+const LOOP_COLORS = [
+  '#ef4444', '#f97316', '#f59e0b', '#eab308',
+  '#84cc16', '#22c55e', '#14b8a6', '#06b6d4',
+  '#3b82f6', '#6366f1', '#a855f7', '#ec4899',
+]
 
 // Auto-convert typed operator words to LaTeX. Whole-word only; results
 // (\land, \overline{…}) can't re-match, so it's idempotent. `not X` becomes
@@ -152,13 +156,17 @@ export default function App() {
   const [derivStep, setDerivStep] = useState<number | null>(null)
   const [derivField, setDerivField] = useState<DerivField>('expr')
   const [loopMode, setLoopMode] = useState(false) // marking a KV group loop
+  const [pickerLoop, setPickerLoop] = useState<string | null>(null) // loop whose colour picker is open
   const [loopFirst, setLoopFirst] = useState<{
     id: string
     row: number
     col: number
   } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
-  const labelInputRef = useRef<HTMLInputElement>(null)
+  const labelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
+  const attachLabel = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
+    labelInputRef.current = el
+  }
   const focusLabelRef = useRef(false) // request to focus the label after box creation
   const returnModeRef = useRef<Mode | null>(null) // creation mode to resume after Done
 
@@ -621,9 +629,11 @@ export default function App() {
 
   // The label input currently focused (palette buttons keep focus via
   // onMouseDown preventDefault, so this stays the field being edited).
-  function activeInput(): HTMLInputElement | null {
+  function activeInput(): HTMLInputElement | HTMLTextAreaElement | null {
     const el = document.activeElement
-    return el instanceof HTMLInputElement ? el : labelInputRef.current
+    return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
+      ? el
+      : labelInputRef.current
   }
 
   // Wrap the selection with pre/post, caret left just before `post`.
@@ -691,7 +701,9 @@ export default function App() {
   }
 
   // Enter adds the next line; Up/Down move between lines; Escape leaves.
-  function handleDerivKey(e: React.KeyboardEvent<HTMLInputElement>) {
+  function handleDerivKey(
+    e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) {
     if (e.key === 'Escape') {
       e.currentTarget.blur()
       setSelection(null)
@@ -1126,7 +1138,7 @@ export default function App() {
               <label>
                 Label
                 <input
-                  ref={labelInputRef}
+                  ref={attachLabel}
                   value={selectedNode.label}
                   onChange={(e) =>
                     dispatch({
@@ -1198,7 +1210,7 @@ export default function App() {
             <label>
               Transition label
               <input
-                ref={labelInputRef}
+                ref={attachLabel}
                 value={selectedEdge.label}
                 onChange={(e) =>
                   dispatch({
@@ -1278,7 +1290,7 @@ export default function App() {
             <label>
               Label
               <input
-                ref={labelInputRef}
+                ref={attachLabel}
                 value={selectedLine?.label ?? ''}
                 onChange={(e) =>
                   dispatch({
@@ -1345,7 +1357,7 @@ export default function App() {
             <label>
               Text
               <input
-                ref={labelInputRef}
+                ref={attachLabel}
                 value={selectedText.text}
                 onChange={(e) =>
                   dispatch({
@@ -1379,7 +1391,7 @@ export default function App() {
               <label>
                 Cell (r{cellSel.row + 1}, c{cellSel.col + 1})
                 <input
-                  ref={labelInputRef}
+                  ref={attachLabel}
                   value={selectedTable.cells[cellSel.row]?.[cellSel.col] ?? ''}
                   onChange={(e) =>
                     dispatch({
@@ -1456,41 +1468,60 @@ export default function App() {
               {loopMode ? 'Marking… dwell 2 corners' : '+ Add group loop'}
             </button>
             {(selectedTable.loops ?? []).map((lp) => (
-              <div key={lp.id} className="loop-row">
-                <button
-                  className="loop-swatch"
-                  style={{ background: lp.color }}
-                  title="Cycle colour (match wrap-around pieces)"
-                  onClick={() =>
-                    dispatch({
-                      type: 'SET_LOOP_COLOR',
-                      id: selectedTable.id,
-                      loopId: lp.id,
-                      color:
-                        LOOP_COLORS[
-                          (LOOP_COLORS.indexOf(lp.color) + 1) % LOOP_COLORS.length
-                        ],
-                    })
-                  }
-                />
-                <input
-                  value={lp.label}
-                  placeholder="term (e.g. x_1 x_3)"
-                  onChange={(e) =>
-                    dispatch({
-                      type: 'SET_LOOP_LABEL',
-                      id: selectedTable.id,
-                      loopId: lp.id,
-                      label: selectedTable.math ? boolConvert(e.target.value, false) : e.target.value,
-                    })
-                  }
-                />
-                <button
-                  className="danger"
-                  onClick={() => dispatch({ type: 'DEL_TABLE_LOOP', id: selectedTable.id, loopId: lp.id })}
-                >
-                  ✕
-                </button>
+              <div key={lp.id}>
+                <div className="loop-row">
+                  <button
+                    className="loop-swatch"
+                    style={{ background: lp.color }}
+                    title="Pick colour"
+                    onClick={() => setPickerLoop((p) => (p === lp.id ? null : lp.id))}
+                  />
+                  <input
+                    value={lp.label}
+                    placeholder="term (e.g. x_1 x_3)"
+                    onChange={(e) =>
+                      dispatch({
+                        type: 'SET_LOOP_LABEL',
+                        id: selectedTable.id,
+                        loopId: lp.id,
+                        label: selectedTable.math ? boolConvert(e.target.value, false) : e.target.value,
+                      })
+                    }
+                  />
+                  <button
+                    className="danger"
+                    onClick={() => {
+                      dispatch({ type: 'DEL_TABLE_LOOP', id: selectedTable.id, loopId: lp.id })
+                      setPickerLoop(null)
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+                {pickerLoop === lp.id && (
+                  <div className="color-picker">
+                    {LOOP_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        className={`color-swatch${lp.color === c ? ' active' : ''}`}
+                        style={{ background: c }}
+                        onClick={() => {
+                          dispatch({ type: 'SET_LOOP_COLOR', id: selectedTable.id, loopId: lp.id, color: c })
+                          setPickerLoop(null)
+                        }}
+                      />
+                    ))}
+                    <input
+                      type="color"
+                      className="color-custom"
+                      value={lp.color}
+                      title="Custom colour"
+                      onChange={(e) =>
+                        dispatch({ type: 'SET_LOOP_COLOR', id: selectedTable.id, loopId: lp.id, color: e.target.value })
+                      }
+                    />
+                  </div>
+                )}
               </div>
             ))}
             <span className="group-title">LaTeX (tabular)</span>
@@ -1522,8 +1553,10 @@ export default function App() {
             )}
             <label>
               Expression
-              <input
-                ref={labelInputRef}
+              <textarea
+                ref={attachLabel}
+                className="expr-input"
+                rows={6}
                 value={selectedDeriv.steps[derivStep].expr}
                 onFocus={() => setDerivField('expr')}
                 onChange={(e) =>

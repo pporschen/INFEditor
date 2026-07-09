@@ -160,6 +160,18 @@ function renderRich(s: string): ReactNode {
   return out
 }
 
+// Render text that may contain `\\` line breaks (like LaTeX) as stacked lines,
+// anchored at x. Single-line text renders inline as before.
+function renderLines(s: string, x: number): ReactNode {
+  const lines = s.split(/\\\\/)
+  if (lines.length === 1) return renderRich(s)
+  return lines.map((ln, i) => (
+    <tspan key={i} x={x} dy={i === 0 ? 0 : '1.25em'}>
+      {renderRich(ln.trim())}
+    </tspan>
+  ))
+}
+
 // Map a relationship type to its markers and line style.
 // diamonds sit at the SOURCE end; arrows/triangles at the TARGET end.
 function relStyle(rel: DiagEdge['rel']): {
@@ -680,13 +692,13 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                   </text>
                   {n.label && (
                     <text x={c.x} y={c.y - hh - 8} className="node-label">
-                      {renderRich(n.label)}
+                      {renderLines(n.label, c.x)}
                     </text>
                   )}
                 </>
               ) : (
                 <text x={c.x} y={c.y} className="node-label">
-                  {renderRich(n.label)}
+                  {renderLines(n.label, c.x)}
                 </text>
               )}
             </g>
@@ -831,7 +843,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                       </text>
                     )}
                     <text x={exprX} y={cy} className="deriv-expr">
-                      {renderRich(st.expr)}
+                      {renderLines(st.expr, exprX)}
                     </text>
                     {i > 0 && st.reason && (
                       <text x={reasonX} y={cy} className="deriv-reason">
@@ -860,7 +872,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 t.text ? '' : ' placeholder'
               }`}
             >
-              {t.text ? renderRich(t.text) : 'Text…'}
+              {t.text ? renderLines(t.text, t.x * GRID) : 'Text…'}
             </text>
           )
         })}

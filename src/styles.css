@@ -472,6 +472,54 @@ button.active .gate-hint {
   padding: 6px 9px;
 }
 
+/* colour picker popover for a loop */
+.color-picker {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  padding: 8px;
+  margin: 2px 0 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.color-swatch {
+  width: 100%;
+  height: 24px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.color-swatch.active {
+  border-color: var(--ink);
+}
+.color-custom {
+  grid-column: span 6;
+  width: 100%;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+
+.expr-input {
+  width: 100%;
+  min-height: 160px;
+  font-size: 20px;
+  line-height: 1.55;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  resize: vertical;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .latex-out {
   width: 100%;
   font-family: ui-monospace, monospace;
