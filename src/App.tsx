@@ -26,6 +26,7 @@ const LOOP_SIZE_MIN = -18 // clamp for self-loop extra size (keeps a visible loo
 const LOOP_SIZE_MAX = 160
 const LOOP_ANGLE_STEP = 30 // degrees the loop rotates per button press
 const LINE_STEP = 1 / 4 // 1/4 of a grid cell — nudge/resize step for wires
+const LOOP_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#14b8a6', '#ec4899', '#84cc16']
 
 // Auto-convert typed operator words to LaTeX. Whole-word only; results
 // (\land, \overline{…}) can't re-match, so it's idempotent. `not X` becomes
@@ -88,25 +89,45 @@ function loadInitial(): Doc {
   }
 }
 
-// Build a fresh table. `inputCols > 0` makes a truth-table shell (n inputs +
-// one output column, 2^n data rows). All cells start empty — the editor never
-// fills in content.
-function makeTable(id: string, x: number, y: number, inputCols: number): DiagTable {
-  const blank = { cols: 3, rows: 3 }
-  const cols = inputCols > 0 ? inputCols + 1 : blank.cols
-  const rows = inputCols > 0 ? (1 << inputCols) + 1 : blank.rows
-  const cells = Array.from({ length: rows }, () => Array(cols).fill(''))
-  return {
-    id,
-    x,
-    y,
-    cols,
-    rows,
-    cw: 3,
-    header: true,
-    cells,
-    inputCols: inputCols > 0 ? inputCols : undefined,
+type TablePreset = 'blank' | 't2' | 't3' | 't4' | 'kv3' | 'kv4'
+
+// Build a fresh table from a preset. Truth tables get n input columns + one
+// output column and 2^n rows; KV maps get the Gray-code grid + variable-group
+// labels. All VALUE cells start empty — the editor never fills in content.
+function makeTable(id: string, x: number, y: number, preset: TablePreset): DiagTable {
+  const base = { id, x, y, cw: 3, header: true }
+  if (preset === 'kv3' || preset === 'kv4') {
+    // header cells spell out the variable combination for each column/row
+    // (Gray order); value cells stay empty for the user to fill.
+    const colHead = [
+      'x_1x_2',
+      'x_1\\overline{x}_2',
+      '\\overline{x}_1\\overline{x}_2',
+      '\\overline{x}_1x_2',
+    ]
+    const rowHead =
+      preset === 'kv3'
+        ? ['x_3', '\\overline{x}_3']
+        : [
+            'x_3x_4',
+            'x_3\\overline{x}_4',
+            '\\overline{x}_3\\overline{x}_4',
+            '\\overline{x}_3x_4',
+          ]
+    const cells = [
+      ['', ...colHead],
+      ...rowHead.map((rl) => [rl, '', '', '', '']),
+    ]
+    return { ...base, cw: 2, cols: 5, rows: cells.length, cells }
   }
+  const n = preset === 't2' ? 2 : preset === 't3' ? 3 : preset === 't4' ? 4 : 0
+  if (n > 0) {
+    const cols = n + 1
+    const rows = (1 << n) + 1
+    const cells = Array.from({ length: rows }, () => Array(cols).fill(''))
+    return { ...base, cols, rows, cells, inputCols: n }
+  }
+  return { ...base, cols: 3, rows: 3, cells: Array.from({ length: 3 }, () => Array(3).fill('')) }
 }
 
 export default function App() {
@@ -122,7 +143,7 @@ export default function App() {
   const [view, setView] = useState({ x: -GRID, y: -GRID, w: PAGE_W + 2 * GRID })
   const [aspect, setAspect] = useState(H / W) // canvas height/width, keeps the grid full-bleed
   const [labelScale, setLabelScale] = useState(1.4)
-  const [tablePreset, setTablePreset] = useState(0) // 0 = blank, n = truth table with n inputs
+  const [tablePreset, setTablePreset] = useState<TablePreset>('blank')
   const [cellSel, setCellSel] = useState<{
     id: string
     row: number
@@ -130,6 +151,12 @@ export default function App() {
   } | null>(null)
   const [derivStep, setDerivStep] = useState<number | null>(null)
   const [derivField, setDerivField] = useState<DerivField>('expr')
+  const [loopMode, setLoopMode] = useState(false) // marking a KV group loop
+  const [loopFirst, setLoopFirst] = useState<{
+    id: string
+    row: number
+    col: number
+  } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const labelInputRef = useRef<HTMLInputElement>(null)
   const focusLabelRef = useRef(false) // request to focus the label after box creation
@@ -240,6 +267,8 @@ export default function App() {
     setPendingCorner(null)
     setHoverCell(null)
     setSelection(null)
+    setLoopMode(false)
+    setLoopFirst(null)
   }, [])
 
   // pan by a fraction of the visible area (so it scales with zoom)
@@ -326,8 +355,8 @@ export default function App() {
       setSelection({ kind: 'text', id })
       focusLabelRef.current = true
     } else if (mode === 'table') {
-      if (tablePreset > 0) {
-        // truth table: single dwell — structure is fixed by the variable count
+      if (tablePreset !== 'blank') {
+        // truth table / KV map: single dwell — structure is fixed
         const id = crypto.randomUUID()
         dispatch({ type: 'ADD_TABLE', table: makeTable(id, gx, gy, tablePreset) })
         returnModeRef.current = 'table'
@@ -433,12 +462,34 @@ export default function App() {
       setCellSel(null)
       return
     }
-    if (mode === 'select') {
-      returnModeRef.current = null
-      setSelection({ kind: 'table', id })
-      setCellSel({ id, row, col })
-      focusLabelRef.current = true // focus the cell input
+    if (mode !== 'select') return
+    // KV loop marking: pick two opposite corner cells
+    if (loopMode && selectedTable && selectedTable.id === id) {
+      if (!loopFirst) {
+        setLoopFirst({ id, row, col })
+      } else {
+        dispatch({
+          type: 'ADD_TABLE_LOOP',
+          id,
+          loop: {
+            id: crypto.randomUUID(),
+            r1: Math.min(loopFirst.row, row),
+            c1: Math.min(loopFirst.col, col),
+            r2: Math.max(loopFirst.row, row),
+            c2: Math.max(loopFirst.col, col),
+            color: LOOP_COLORS[(selectedTable.loops?.length ?? 0) % LOOP_COLORS.length],
+            label: '',
+          },
+        })
+        setLoopFirst(null)
+        setLoopMode(false)
+      }
+      return
     }
+    returnModeRef.current = null
+    setSelection({ kind: 'table', id })
+    setCellSel({ id, row, col })
+    focusLabelRef.current = true // focus the cell input
   }
 
   function handleDerivRowClick(id: string, index: number) {
@@ -658,6 +709,15 @@ export default function App() {
   }
 
   // Spreadsheet-style navigation while editing a table cell.
+  // In a math table, convert a trailing operator word when leaving the cell.
+  function finalizeCell() {
+    if (!selectedTable || !cellSel || !selectedTable.math) return
+    const cur = selectedTable.cells[cellSel.row]?.[cellSel.col] ?? ''
+    const fin = boolConvert(cur, true)
+    if (fin !== cur)
+      dispatch({ type: 'SET_TABLE_CELL', id: cellSel.id, row: cellSel.row, col: cellSel.col, text: fin })
+  }
+
   function handleCellKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!cellSel || !selectedTable) return
     const { rows, cols } = selectedTable
@@ -697,6 +757,7 @@ export default function App() {
       default:
         return // let all other keys (incl. ←/→ for the caret) behave normally
     }
+    finalizeCell() // convert a trailing "not A" etc. before moving
     setCellSel({ id: cellSel.id, row, col })
     requestAnimationFrame(() => {
       el.focus()
@@ -752,6 +813,8 @@ export default function App() {
           setPendingCorner(null)
           setHoverCell(null)
           setSelection(null)
+          setLoopMode(false)
+          setLoopFirst(null)
           break
         case 'Delete':
         case 'Backspace':
@@ -878,46 +941,28 @@ export default function App() {
           <div className="group">
             <span className="group-title">Table type</span>
             <div className="btn-grid">
-              <button
-                className={tablePreset === 0 ? 'active' : ''}
-                onClick={() => {
-                  setTablePreset(0)
-                  setPendingCorner(null)
-                  setHoverCell(null)
-                }}
-              >
-                Blank (draw)
-              </button>
-              <button
-                className={tablePreset === 2 ? 'active' : ''}
-                onClick={() => {
-                  setTablePreset(2)
-                  setPendingCorner(null)
-                  setHoverCell(null)
-                }}
-              >
-                Truth 2
-              </button>
-              <button
-                className={tablePreset === 3 ? 'active' : ''}
-                onClick={() => {
-                  setTablePreset(3)
-                  setPendingCorner(null)
-                  setHoverCell(null)
-                }}
-              >
-                Truth 3
-              </button>
-              <button
-                className={tablePreset === 4 ? 'active' : ''}
-                onClick={() => {
-                  setTablePreset(4)
-                  setPendingCorner(null)
-                  setHoverCell(null)
-                }}
-              >
-                Truth 4
-              </button>
+              {(
+                [
+                  ['blank', 'Blank (draw)'],
+                  ['t2', 'Truth 2'],
+                  ['t3', 'Truth 3'],
+                  ['t4', 'Truth 4'],
+                  ['kv3', 'KV 3-var'],
+                  ['kv4', 'KV 4-var'],
+                ] as [TablePreset, string][]
+              ).map(([p, label]) => (
+                <button
+                  key={p}
+                  className={tablePreset === p ? 'active' : ''}
+                  onClick={() => {
+                    setTablePreset(p)
+                    setPendingCorner(null)
+                    setHoverCell(null)
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -1005,7 +1050,12 @@ export default function App() {
         </div>
 
         <div className="hint">
-          {mode === 'node' &&
+          {loopMode &&
+            (loopFirst
+              ? 'Now dwell the opposite corner cell to draw the group loop.'
+              : 'Dwell one corner cell of the group, then the opposite corner.')}
+          {!loopMode &&
+            mode === 'node' &&
             shape === 'dot' &&
             'Dwell a grid point to drop a junction dot (place as many as you like).'}
           {mode === 'node' &&
@@ -1029,10 +1079,10 @@ export default function App() {
           {mode === 'deriv' &&
             'Dwell to start a derivation, then type each line and reason. You do the algebra; it makes the LaTeX.'}
           {mode === 'table' &&
-            tablePreset > 0 &&
-            'Dwell to place the truth-table shell, then click a cell to edit. You fill every value.'}
+            tablePreset !== 'blank' &&
+            'Dwell to place the shell, then click a cell to edit. You fill every value.'}
           {mode === 'table' &&
-            tablePreset === 0 &&
+            tablePreset === 'blank' &&
             (pendingCorner
               ? 'Now dwell the opposite corner — the region becomes a grid of cells.'
               : 'Dwell one corner of the table, then the opposite corner.')}
@@ -1061,6 +1111,7 @@ export default function App() {
           onLineClick={handleLineClick}
           onTextClick={handleTextClick}
           cellSel={cellSel}
+          loopFirst={loopFirst}
           onCellClick={handleCellClick}
           derivStep={derivStep}
           onDerivRowClick={handleDerivRowClick}
@@ -1336,10 +1387,13 @@ export default function App() {
                       id: selectedTable.id,
                       row: cellSel.row,
                       col: cellSel.col,
-                      text: e.target.value,
+                      text: selectedTable.math
+                        ? boolConvert(e.target.value, false)
+                        : e.target.value,
                     })
                   }
                   onKeyDown={handleCellKey}
+                  onBlur={finalizeCell}
                   autoFocus
                 />
               </label>
@@ -1391,6 +1445,54 @@ export default function App() {
                 Fill input pattern
               </button>
             )}
+            <span className="group-title">KV groups (loops)</span>
+            <button
+              className={loopMode ? 'active' : ''}
+              onClick={() => {
+                setLoopMode((m) => !m)
+                setLoopFirst(null)
+              }}
+            >
+              {loopMode ? 'Marking… dwell 2 corners' : '+ Add group loop'}
+            </button>
+            {(selectedTable.loops ?? []).map((lp) => (
+              <div key={lp.id} className="loop-row">
+                <button
+                  className="loop-swatch"
+                  style={{ background: lp.color }}
+                  title="Cycle colour (match wrap-around pieces)"
+                  onClick={() =>
+                    dispatch({
+                      type: 'SET_LOOP_COLOR',
+                      id: selectedTable.id,
+                      loopId: lp.id,
+                      color:
+                        LOOP_COLORS[
+                          (LOOP_COLORS.indexOf(lp.color) + 1) % LOOP_COLORS.length
+                        ],
+                    })
+                  }
+                />
+                <input
+                  value={lp.label}
+                  placeholder="term (e.g. x_1 x_3)"
+                  onChange={(e) =>
+                    dispatch({
+                      type: 'SET_LOOP_LABEL',
+                      id: selectedTable.id,
+                      loopId: lp.id,
+                      label: selectedTable.math ? boolConvert(e.target.value, false) : e.target.value,
+                    })
+                  }
+                />
+                <button
+                  className="danger"
+                  onClick={() => dispatch({ type: 'DEL_TABLE_LOOP', id: selectedTable.id, loopId: lp.id })}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
             <span className="group-title">LaTeX (tabular)</span>
             <textarea className="latex-out" readOnly rows={5} value={tableToLatex(selectedTable)} />
             <button onClick={() => navigator.clipboard?.writeText(tableToLatex(selectedTable))}>

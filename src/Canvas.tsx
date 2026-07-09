@@ -21,6 +21,7 @@ import { GATES } from './gates'
 const LOOP_BASE = 30 // base bulge distance of a self-loop, in px
 const LOOP_W = 20 // half-width of the self-loop
 
+
 // Render a small LaTeX subset used for logic/boolean formatting:
 //   sub/superscript  q_0  x^2  a_{10}
 //   negation bar     \overline{A+B}  (\bar works too, nesting supported)
@@ -208,6 +209,7 @@ interface Props {
   onLineClick: (id: string) => void
   onTextClick: (id: string) => void
   cellSel: { id: string; row: number; col: number } | null
+  loopFirst: { id: string; row: number; col: number } | null
   onCellClick: (id: string, row: number, col: number) => void
   derivStep: number | null
   onDerivRowClick: (id: string, index: number) => void
@@ -231,6 +233,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     onLineClick,
     onTextClick,
     cellSel,
+    loopFirst,
     onCellClick,
     derivStep,
     onDerivRowClick,
@@ -721,6 +724,11 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                     cellSel.id === tb.id &&
                     cellSel.row === r &&
                     cellSel.col === c
+                  const loopSel =
+                    loopFirst &&
+                    loopFirst.id === tb.id &&
+                    loopFirst.row === r &&
+                    loopFirst.col === c
                   return (
                     <g
                       key={`${r}-${c}`}
@@ -733,7 +741,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                         width={cw}
                         height={ch}
                         className={`table-cell${isHeader ? ' table-header' : ''}${
-                          sel ? ' selected' : ''
+                          sel || loopSel ? ' selected' : ''
                         }`}
                       />
                       <text
@@ -747,6 +755,40 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                   )
                 }),
               )}
+
+              {/* KV group loops */}
+              {(tb.loops ?? []).map((lp, li) => {
+                const inset = 5 + (li % 4) * 4
+                const x1 = (tb.x + lp.c1 * tb.cw) * GRID + inset
+                const y1 = (tb.y + lp.r1) * GRID + inset
+                const w = (lp.c2 - lp.c1 + 1) * cw - 2 * inset
+                const h = (lp.r2 - lp.r1 + 1) * ch - 2 * inset
+                return (
+                  <g key={lp.id} pointerEvents="none">
+                    <rect
+                      x={x1}
+                      y={y1}
+                      width={w}
+                      height={h}
+                      rx={12}
+                      fill="none"
+                      stroke={lp.color}
+                      strokeWidth={2.5}
+                    />
+                    {lp.label && (
+                      <text
+                        x={x1 + 4}
+                        y={y1 + 2}
+                        className="loop-label"
+                        fill={lp.color}
+                      >
+                        {renderRich(lp.label)}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
+
             </g>
           )
         })}

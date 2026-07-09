@@ -60,6 +60,13 @@ export function applyLightStyles(root: Element, ls: number) {
     'font-family': 'sans-serif',
   })
   setStyle(root, '.table-header-text', { 'font-weight': '600' })
+  setStyle(root, '.kv-bar', { fill: 'none', stroke: LIGHT.stroke, 'stroke-width': '2' })
+  setStyle(root, '.kv-bar-label', {
+    fill: LIGHT.ink,
+    'font-size': String(13 * ls),
+    'dominant-baseline': 'central',
+    'font-family': 'sans-serif',
+  })
   setStyle(root, '.deriv-rel', {
     fill: LIGHT.ink,
     'font-size': String(16 * ls),

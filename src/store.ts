@@ -3,6 +3,7 @@ import type {
   Doc,
   DiagNode,
   DiagTable,
+  TableLoop,
   DiagDerivation,
   DerivField,
   Shape,
@@ -48,6 +49,10 @@ export type Action =
   | { type: 'FILL_TABLE_INPUTS'; id: string }
   | { type: 'MOVE_TABLE'; id: string; x: number; y: number }
   | { type: 'DELETE_TABLE'; id: string }
+  | { type: 'ADD_TABLE_LOOP'; id: string; loop: TableLoop }
+  | { type: 'SET_LOOP_LABEL'; id: string; loopId: string; label: string }
+  | { type: 'SET_LOOP_COLOR'; id: string; loopId: string; color: string }
+  | { type: 'DEL_TABLE_LOOP'; id: string; loopId: string }
   | { type: 'ADD_DERIV'; derivation: DiagDerivation }
   | { type: 'SET_DERIV'; id: string; index: number; field: DerivField; value: string }
   | { type: 'ADD_DERIV_STEP'; id: string; after: number }
@@ -351,6 +356,50 @@ function docReducer(doc: Doc, a: Action): Doc {
       }
     case 'DELETE_TABLE':
       return { ...doc, tables: doc.tables.filter((t) => t.id !== a.id) }
+    case 'ADD_TABLE_LOOP':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) =>
+          t.id === a.id ? { ...t, loops: [...(t.loops ?? []), a.loop] } : t,
+        ),
+      }
+    case 'SET_LOOP_LABEL':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) =>
+          t.id === a.id
+            ? {
+                ...t,
+                loops: (t.loops ?? []).map((l) =>
+                  l.id === a.loopId ? { ...l, label: a.label } : l,
+                ),
+              }
+            : t,
+        ),
+      }
+    case 'SET_LOOP_COLOR':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) =>
+          t.id === a.id
+            ? {
+                ...t,
+                loops: (t.loops ?? []).map((l) =>
+                  l.id === a.loopId ? { ...l, color: a.color } : l,
+                ),
+              }
+            : t,
+        ),
+      }
+    case 'DEL_TABLE_LOOP':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) =>
+          t.id === a.id
+            ? { ...t, loops: (t.loops ?? []).filter((l) => l.id !== a.loopId) }
+            : t,
+        ),
+      }
     case 'ADD_DERIV':
       return { ...doc, derivations: [...doc.derivations, a.derivation] }
     case 'SET_DERIV':

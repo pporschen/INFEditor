@@ -270,6 +270,27 @@ button.active kbd {
 .table-header-text {
   font-weight: 600;
 }
+.loop-label {
+  font-size: calc(12px * var(--label-scale, 1));
+  font-weight: 600;
+  text-anchor: start;
+  dominant-baseline: hanging;
+  pointer-events: none;
+}
+
+/* KV/Veitch variable bars */
+.kv-bar {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.kv-bar-label {
+  fill: var(--ink);
+  font-size: calc(13px * var(--label-scale, 1));
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
 
 /* boolean-algebra derivation */
 .deriv-row {
@@ -424,6 +445,33 @@ button.active .gate-hint {
   border: 1px solid var(--border);
   border-radius: 8px;
 }
+.loop-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.loop-swatch {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.loop-row input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  padding: 6px 8px;
+}
+.loop-row button {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+}
+
 .latex-out {
   width: 100%;
   font-family: ui-monospace, monospace;

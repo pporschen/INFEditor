@@ -73,8 +73,15 @@ Live: **https://pporschen.github.io/INFEditor/**
 - **DiagLine** `{id, x1,y1,x2,y2, arrow?, label?, labelPos?}` — free wires; coords are
   fractional (¼-cell nudge/resize buttons). Arrowheads start/end/both.
 - **DiagText** `{id, x, y, text}` — free text anywhere.
-- **DiagTable** `{id, x, y, cols, rows, cw, header, cells[][], inputCols?, math?}` —
-  tables + truth-table shells. `math` wraps cells in `$…$` on export.
+- **DiagTable** `{id, x, y, cols, rows, cw, header, cells[][], inputCols?, math?, loops?}` —
+  tables + truth-table shells. `math` wraps cells in `$…$` on export. `loops` are
+  **KV/Karnaugh group markings** (`TableLoop {r1,c1,r2,c2,color,label}`): rounded
+  colored outlines around a cell block, drawn by dwelling two corner cells
+  (`loopMode`/`loopFirst` in App). Wrap-around = two same-color loops. They keep
+  their colour in export/print (not light-baked). `kv` (3|4) makes it a **Veitch
+  diagram**: a pure value grid with `x_i` variable **bars** along the axes
+  (`KV_SPEC` in Canvas.tsx), no binary codes — the German KV-Diagramm style.
+  Table presets: `blank` (2-corner draw), `t2/t3/t4` (truth shells), `kv3/kv4`.
 - **DiagDerivation** `{id, x, y, exprW, steps: {rel, expr, reason}[]}` — boolean-algebra
   derivation → `align*`. Step 0 is the initial expression.
 - **pages: number** — count of stacked A4 pages.
@@ -91,12 +98,12 @@ nicely **and** exports verbatim-correct:
 - operators: `\cdot`·  `\oplus`⊕  `\lnot`/`\neg`¬  `\lor`/`\vee`∨  `\land`/`\wedge`∧.
 - `\left` / `\right` are stripped (keep the bracket; drop the invisible `\left.`/`\right.` dot).
 
-Boolean **word auto-convert** in the derivation *Expression* field:
-`and→\land`, `or→\lor`, `xor→\oplus`, `not X→\overline{X}` (waits for a space /
-finalizes on blur so it grabs the whole operand — product notation `not AB`
-works), `nand/nor/xnor→\overline{…}`. Idempotent, whole-word only. Scoped to the
-derivation expr on purpose (so ordinary prose isn't mangled); extend elsewhere
-only if asked.
+Boolean **word auto-convert** (`boolConvert`): `and→\land`, `or→\lor`,
+`xor→\oplus`, `not X→\overline{X}` (waits for a space / finalizes on blur so it
+grabs the whole operand — product notation `not AB` works), `nand/nor/xnor→\overline{…}`.
+Idempotent, whole-word only. Applied in the derivation *Expression* field and in
+**Math-mode table cells** (gated on the table's `math` toggle, so ordinary prose
+tables aren't mangled).
 
 An **Insert** palette (shown when a label field is focused) inserts these:
 `A̅ NOT`, `· AND`, `+ OR`, `⊕ XOR`, `( )`, `x²`, `x₂`. It targets whichever input

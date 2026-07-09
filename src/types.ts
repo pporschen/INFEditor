@@ -66,6 +66,18 @@ export interface DiagText {
   text: string
 }
 
+// A KV/Karnaugh group loop: a rounded outline around a rectangular cell block
+// (r1..r2, c1..c2 inclusive). Wrap-around groups are drawn as two same-color loops.
+export interface TableLoop {
+  id: string
+  r1: number
+  c1: number
+  r2: number
+  c2: number
+  color: string
+  label: string
+}
+
 // A table / truth-table. Purely a formatting grid — the user fills all values.
 export interface DiagTable {
   id: string
@@ -78,6 +90,8 @@ export interface DiagTable {
   cells: string[][] // [row][col] contents (verbatim, may contain LaTeX)
   inputCols?: number // truth tables: how many left columns are inputs
   math?: boolean // wrap cell contents in $…$ on LaTeX export
+  loops?: TableLoop[] // KV/Karnaugh group markings
+  kv?: number // 3 or 4: render Veitch variable bars (x_i) along the axes
 }
 
 // One line of a boolean-algebra derivation. Row 0 is the initial expression
