@@ -169,6 +169,7 @@ export default function App() {
   }
   const focusLabelRef = useRef(false) // request to focus the label after box creation
   const returnModeRef = useRef<Mode | null>(null) // creation mode to resume after Done
+  const pendingCaretRef = useRef<number | null>(null) // caret to set after focusing
 
   // autosave on every change
   useEffect(() => {
@@ -223,7 +224,10 @@ export default function App() {
     if (derivStep == null || selection?.kind !== 'deriv') return
     const d = doc.derivations.find((x) => x.id === selection.id)
     if (!d) return
-    const lineY = (d.y + derivStep + 0.5) * GRID
+    let off = 0
+    for (let k = 0; k < derivStep; k++)
+      off += Math.max(1, d.steps[k].expr.split(/\\\\/).length)
+    const lineY = (d.y + off + 0.5) * GRID
     setView((v) => {
       const h = v.w * aspect
       const relY = (lineY - v.y) / h
@@ -236,8 +240,16 @@ export default function App() {
   // after a box is created we select it and focus its label input for typing
   useEffect(() => {
     if (focusLabelRef.current && labelInputRef.current) {
-      labelInputRef.current.focus()
-      labelInputRef.current.select()
+      const el = labelInputRef.current
+      el.focus()
+      const caret = pendingCaretRef.current
+      if (caret != null) {
+        const pos = Math.max(0, Math.min(el.value.length, caret))
+        el.setSelectionRange(pos, pos)
+        pendingCaretRef.current = null
+      } else {
+        el.select()
+      }
       focusLabelRef.current = false
     }
   }, [selection])
@@ -514,6 +526,18 @@ export default function App() {
       setDerivField('expr')
       focusLabelRef.current = true
     }
+  }
+
+  // Click the rendered expression → focus the field and drop the caret near
+  // the clicked spot (approximate; fine-tune with ←/→).
+  function handleExprCaret(id: string, index: number, srcIndex: number) {
+    if (mode !== 'select') return
+    returnModeRef.current = null
+    setSelection({ kind: 'deriv', id })
+    setDerivStep(index)
+    setDerivField('expr')
+    pendingCaretRef.current = srcIndex
+    focusLabelRef.current = true
   }
 
   function handleNodeClick(id: string) {
@@ -1127,6 +1151,7 @@ export default function App() {
           onCellClick={handleCellClick}
           derivStep={derivStep}
           onDerivRowClick={handleDerivRowClick}
+          onExprCaret={handleExprCaret}
         />
       </main>
 

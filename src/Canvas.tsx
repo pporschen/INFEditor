@@ -162,11 +162,15 @@ function renderRich(s: string): ReactNode {
 
 // Render text that may contain `\\` line breaks (like LaTeX) as stacked lines,
 // anchored at x. Single-line text renders inline as before.
-function renderLines(s: string, x: number): ReactNode {
+function renderLines(
+  s: string,
+  x: number,
+  lineHeight: number | string = '1.6em',
+): ReactNode {
   const lines = s.split(/\\\\/)
   if (lines.length === 1) return renderRich(s)
   return lines.map((ln, i) => (
-    <tspan key={i} x={x} dy={i === 0 ? 0 : '1.25em'}>
+    <tspan key={i} x={x} dy={i === 0 ? 0 : lineHeight}>
       {renderRich(ln.trim())}
     </tspan>
   ))
@@ -225,6 +229,7 @@ interface Props {
   onCellClick: (id: string, row: number, col: number) => void
   derivStep: number | null
   onDerivRowClick: (id: string, index: number) => void
+  onExprCaret: (id: string, index: number, srcIndex: number) => void
 }
 
 export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
@@ -249,6 +254,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     onCellClick,
     derivStep,
     onDerivRowClick,
+    onExprCaret,
   },
   ref,
 ) {
@@ -813,6 +819,15 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           const relX = (d.x + 0.5) * GRID
           const exprX = (d.x + 1) * GRID
           const reasonX = (d.x + 1 + d.exprW) * GRID
+          // each step is as tall as its expression's line count; steps stack
+          const lineCount = (s: string) => Math.max(1, s.split(/\\\\/).length)
+          const offsets: number[] = []
+          let acc = 0
+          for (const st of d.steps) {
+            offsets.push(acc)
+            acc += lineCount(st.expr)
+          }
+          const totalRows = acc
           return (
             <g key={d.id}>
               {dsel && (
@@ -821,20 +836,22 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                   x={d.x * GRID - 4}
                   y={d.y * GRID - 4}
                   width={(1 + d.exprW + 6) * GRID + 8}
-                  height={d.steps.length * GRID + 8}
+                  height={totalRows * GRID + 8}
                   fill="none"
                 />
               )}
               {d.steps.map((st, i) => {
-                const cy = (d.y + i + 0.5) * GRID
+                const top = d.y + offsets[i]
+                const rowH = lineCount(st.expr)
+                const cy = (top + 0.5) * GRID
                 const rowSel = dsel && derivStep === i
                 return (
                   <g key={i} {...hitProps} onClick={() => onDerivRowClick(d.id, i)}>
                     <rect
                       x={d.x * GRID}
-                      y={(d.y + i) * GRID}
+                      y={top * GRID}
                       width={(1 + d.exprW + 6) * GRID}
-                      height={GRID}
+                      height={rowH * GRID}
                       className={`deriv-row${rowSel ? ' selected' : ''}`}
                     />
                     {i > 0 && (
@@ -842,8 +859,27 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                         {renderRich(st.rel || '=')}
                       </text>
                     )}
-                    <text x={exprX} y={cy} className="deriv-expr">
-                      {renderLines(st.expr, exprX)}
+                    <text
+                      x={exprX}
+                      y={cy}
+                      className="deriv-expr"
+                      style={{ pointerEvents: mode === 'select' ? 'auto' : undefined }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const el = e.currentTarget
+                        const svg = el.ownerSVGElement
+                        const ctm = svg?.getScreenCTM()
+                        if (!svg || !ctm) return
+                        const p = svg.createSVGPoint()
+                        p.x = e.clientX
+                        p.y = e.clientY
+                        const wx = p.matrixTransform(ctm.inverse()).x
+                        const w = el.getComputedTextLength() || 1
+                        const frac = Math.max(0, Math.min(1, (wx - exprX) / w))
+                        onExprCaret(d.id, i, Math.round(frac * st.expr.length))
+                      }}
+                    >
+                      {renderLines(st.expr, exprX, GRID)}
                     </text>
                     {i > 0 && st.reason && (
                       <text x={reasonX} y={cy} className="deriv-reason">
