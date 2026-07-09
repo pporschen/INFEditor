@@ -627,7 +627,19 @@ export default function App() {
     focusLabelRef.current = true
   }
 
-  // Enter adds the next derivation line; Escape leaves.
+  // Move to another derivation line (same derivation), focusing its expression.
+  function gotoStep(index: number) {
+    if (!selectedDeriv) return
+    const i = Math.max(0, Math.min(selectedDeriv.steps.length - 1, index))
+    if (i === derivStep) return
+    finalizeDeriv()
+    setDerivStep(i)
+    setDerivField('expr')
+    setSelection({ kind: 'deriv', id: selectedDeriv.id }) // force the focus effect
+    focusLabelRef.current = true
+  }
+
+  // Enter adds the next line; Up/Down move between lines; Escape leaves.
   function handleDerivKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Escape') {
       e.currentTarget.blur()
@@ -636,6 +648,12 @@ export default function App() {
     } else if (e.key === 'Enter') {
       e.preventDefault()
       addStep()
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (derivStep != null) gotoStep(derivStep + 1)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (derivStep != null) gotoStep(derivStep - 1)
     }
   }
 
