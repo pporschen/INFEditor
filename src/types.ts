@@ -81,6 +81,8 @@ export interface TableLoop {
   c2: number
   color: string
   label: string
+  wrapH?: boolean // group wraps across the left/right edges
+  wrapV?: boolean // group wraps across the top/bottom edges
 }
 
 // A table / truth-table. Purely a formatting grid — the user fills all values.

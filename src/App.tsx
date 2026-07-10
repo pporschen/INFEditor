@@ -1640,6 +1640,24 @@ export default function App() {
                     }
                   />
                   <button
+                    className={lp.wrapH ? 'active' : ''}
+                    title="Wrap across left/right edges"
+                    onClick={() =>
+                      dispatch({ type: 'TOGGLE_LOOP_WRAP', id: selectedTable.id, loopId: lp.id, axis: 'h' })
+                    }
+                  >
+                    ⇄
+                  </button>
+                  <button
+                    className={lp.wrapV ? 'active' : ''}
+                    title="Wrap across top/bottom edges"
+                    onClick={() =>
+                      dispatch({ type: 'TOGGLE_LOOP_WRAP', id: selectedTable.id, loopId: lp.id, axis: 'v' })
+                    }
+                  >
+                    ⇅
+                  </button>
+                  <button
                     className="danger"
                     onClick={() => {
                       dispatch({ type: 'DEL_TABLE_LOOP', id: selectedTable.id, loopId: lp.id })

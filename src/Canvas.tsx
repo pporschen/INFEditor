@@ -799,31 +799,57 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 }),
               )}
 
-              {/* KV group loops — inset by overlap depth, so independent loops
-                  are identical and overlapping ones nest consistently */}
+              {/* KV group loops — inset by overlap depth; a wrap group is drawn
+                  as mirrored pieces that arc past the opposite edge */}
               {(tb.loops ?? []).map((lp, li, arr) => {
                 const depth = arr.slice(0, li).filter((o) => loopsOverlap(o, lp)).length
                 const inset = 5 + depth * 6
-                const x1 = (tb.x + lp.c1 * tb.cw) * GRID + inset
-                const y1 = (tb.y + lp.r1) * GRID + inset
-                const w = (lp.c2 - lp.c1 + 1) * cw - 2 * inset
-                const h = (lp.r2 - lp.r1 + 1) * ch - 2 * inset
+                const EXT = 12 // how far a wrapped side pokes past the border
+                // value-grid bounds (skip the header row/column on KV maps)
+                const cMin = tb.kv ? 1 : 0
+                const cMax = tb.cols - 1
+                const rMin = tb.kv ? 1 : 0
+                const rMax = tb.rows - 1
+                const mC = (c: number) => cMin + cMax - c
+                const mR = (r: number) => rMin + rMax - r
+                type Piece = { r1: number; c1: number; r2: number; c2: number }
+                const pieces: Piece[] = [{ r1: lp.r1, c1: lp.c1, r2: lp.r2, c2: lp.c2 }]
+                if (lp.wrapH)
+                  pieces.push({ r1: lp.r1, c1: mC(lp.c2), r2: lp.r2, c2: mC(lp.c1) })
+                if (lp.wrapV)
+                  pieces.push({ r1: mR(lp.r2), c1: lp.c1, r2: mR(lp.r1), c2: lp.c2 })
+                if (lp.wrapH && lp.wrapV)
+                  pieces.push({ r1: mR(lp.r2), c1: mC(lp.c2), r2: mR(lp.r1), c2: mC(lp.c1) })
                 return (
                   <g key={lp.id} pointerEvents="none">
-                    <rect
-                      x={x1}
-                      y={y1}
-                      width={w}
-                      height={h}
-                      rx={12}
-                      fill="none"
-                      stroke={lp.color}
-                      strokeWidth={2.5}
-                    />
+                    {pieces.map((p, pi) => {
+                      // extend a side past the border where the group wraps
+                      const li_ = lp.wrapH && p.c1 === cMin ? -EXT : inset
+                      const ri_ = lp.wrapH && p.c2 === cMax ? -EXT : inset
+                      const ti_ = lp.wrapV && p.r1 === rMin ? -EXT : inset
+                      const bi_ = lp.wrapV && p.r2 === rMax ? -EXT : inset
+                      const x = (tb.x + p.c1 * tb.cw) * GRID + li_
+                      const xr = (tb.x + (p.c2 + 1) * tb.cw) * GRID - ri_
+                      const y = (tb.y + p.r1) * GRID + ti_
+                      const yb = (tb.y + p.r2 + 1) * GRID - bi_
+                      return (
+                        <rect
+                          key={pi}
+                          x={x}
+                          y={y}
+                          width={xr - x}
+                          height={yb - y}
+                          rx={12}
+                          fill="none"
+                          stroke={lp.color}
+                          strokeWidth={2.5}
+                        />
+                      )
+                    })}
                     {lp.label && (
                       <text
-                        x={x1 + 4}
-                        y={y1 + 2}
+                        x={(tb.x + lp.c1 * tb.cw) * GRID + inset + 4}
+                        y={(tb.y + lp.r1) * GRID + inset + 2}
                         className="loop-label"
                         fill={lp.color}
                       >

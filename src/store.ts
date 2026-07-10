@@ -57,6 +57,7 @@ export type Action =
   | { type: 'ADD_TABLE_LOOP'; id: string; loop: TableLoop }
   | { type: 'SET_LOOP_LABEL'; id: string; loopId: string; label: string }
   | { type: 'SET_LOOP_COLOR'; id: string; loopId: string; color: string }
+  | { type: 'TOGGLE_LOOP_WRAP'; id: string; loopId: string; axis: 'h' | 'v' }
   | { type: 'DEL_TABLE_LOOP'; id: string; loopId: string }
   | { type: 'ADD_DERIV'; derivation: DiagDerivation }
   | { type: 'SET_DERIV'; id: string; index: number; field: DerivField; value: string }
@@ -438,6 +439,24 @@ function docReducer(doc: Doc, a: Action): Doc {
                 ...t,
                 loops: (t.loops ?? []).map((l) =>
                   l.id === a.loopId ? { ...l, color: a.color } : l,
+                ),
+              }
+            : t,
+        ),
+      }
+    case 'TOGGLE_LOOP_WRAP':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) =>
+          t.id === a.id
+            ? {
+                ...t,
+                loops: (t.loops ?? []).map((l) =>
+                  l.id === a.loopId
+                    ? a.axis === 'h'
+                      ? { ...l, wrapH: !l.wrapH }
+                      : { ...l, wrapV: !l.wrapV }
+                    : l,
                 ),
               }
             : t,
