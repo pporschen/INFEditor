@@ -167,15 +167,35 @@ function renderRich(s: string): ReactNode {
 
 // Render text that may contain `\\` line breaks (like LaTeX) as stacked lines,
 // anchored at x. Single-line text renders inline as before.
+type LineClick = (
+  e: React.MouseEvent<SVGTSpanElement>,
+  lineIndex: number,
+  srcOffset: number,
+  rawLine: string,
+) => void
+
 function renderLines(
   s: string,
   x: number,
   lineHeight: number | string = '1.6em',
+  onLineClick?: LineClick,
 ): ReactNode {
   const lines = s.split(/\\\\/)
-  if (lines.length === 1) return renderRich(s)
+  if (lines.length === 1 && !onLineClick) return renderRich(s)
+  // source offset of each line (each `\\` separator is 2 chars)
+  const offsets: number[] = []
+  let acc = 0
+  for (const ln of lines) {
+    offsets.push(acc)
+    acc += ln.length + 2
+  }
   return lines.map((ln, i) => (
-    <tspan key={i} x={x} dy={i === 0 ? 0 : lineHeight}>
+    <tspan
+      key={i}
+      x={x}
+      dy={i === 0 ? 0 : lineHeight}
+      onClick={onLineClick ? (e) => onLineClick(e, i, offsets[i], ln) : undefined}
+    >
       {renderRich(ln.trim())}
     </tspan>
   ))
@@ -871,22 +891,32 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                       y={cy}
                       className="deriv-expr"
                       style={{ pointerEvents: mode === 'select' ? 'auto' : undefined }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const el = e.currentTarget
-                        const svg = el.ownerSVGElement
-                        const ctm = svg?.getScreenCTM()
-                        if (!svg || !ctm) return
-                        const p = svg.createSVGPoint()
-                        p.x = e.clientX
-                        p.y = e.clientY
-                        const wx = p.matrixTransform(ctm.inverse()).x
-                        const w = el.getComputedTextLength() || 1
-                        const frac = Math.max(0, Math.min(1, (wx - exprX) / w))
-                        onExprCaret(d.id, i, Math.round(frac * st.expr.length))
-                      }}
                     >
-                      {renderLines(st.expr, exprX, GRID)}
+                      {renderLines(
+                        st.expr,
+                        exprX,
+                        GRID,
+                        mode === 'select'
+                          ? (e, _li, srcOffset, rawLine) => {
+                              e.stopPropagation()
+                              const tsp = e.currentTarget
+                              const svg = tsp.ownerSVGElement
+                              const ctm = svg?.getScreenCTM()
+                              if (!svg || !ctm) return
+                              const p = svg.createSVGPoint()
+                              p.x = e.clientX
+                              p.y = e.clientY
+                              const localX = p.matrixTransform(ctm.inverse()).x
+                              const w = tsp.getComputedTextLength() || 1
+                              const frac = Math.max(0, Math.min(1, (localX - exprX) / w))
+                              onExprCaret(
+                                d.id,
+                                i,
+                                srcOffset + Math.round(frac * rawLine.length),
+                              )
+                            }
+                          : undefined,
+                      )}
                     </text>
                     {i > 0 && st.reason && (
                       <text x={reasonX} y={cy} className="deriv-reason">

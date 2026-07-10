@@ -5,7 +5,7 @@ import { useEditor } from './store'
 import { exportPng } from './exportPng'
 import { printA4 } from './printA4'
 import { GATES, GATE_ORDER } from './gates'
-import { GRID, W, H, PAGE_W } from './geometry'
+import { GRID, W, H, PAGE_W, PAGE_MARGIN } from './geometry'
 import { tableToLatex, derivToLatex } from './latex'
 import { kvHeaderRow, kvHeaderCol } from './kv'
 import type {
@@ -421,7 +421,8 @@ export default function App() {
           id,
           x: gx,
           y: gy,
-          exprW: 8,
+          // expression column fills the printable width (inside the margins)
+          exprW: Math.round((PAGE_W - 2 * PAGE_MARGIN) / GRID) - 7,
           steps: [{ rel: '=', expr: '', reason: '' }],
         },
       })
@@ -1651,12 +1652,6 @@ export default function App() {
                 }}
               >
                 Del line
-              </button>
-              <button onClick={() => dispatch({ type: 'DERIV_WIDTH', id: selectedDeriv.id, delta: -1 })}>
-                Narrower
-              </button>
-              <button onClick={() => dispatch({ type: 'DERIV_WIDTH', id: selectedDeriv.id, delta: 1 })}>
-                Wider
               </button>
             </div>
             <span className="group-title">LaTeX (align*)</span>

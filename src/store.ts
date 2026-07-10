@@ -59,7 +59,6 @@ export type Action =
   | { type: 'SET_DERIV'; id: string; index: number; field: DerivField; value: string }
   | { type: 'ADD_DERIV_STEP'; id: string; after: number }
   | { type: 'DEL_DERIV_STEP'; id: string; index: number }
-  | { type: 'DERIV_WIDTH'; id: string; delta: number }
   | { type: 'MOVE_DERIV'; id: string; x: number; y: number }
   | { type: 'DELETE_DERIV'; id: string }
   | { type: 'SET_PAGES'; count: number }
@@ -454,13 +453,6 @@ function docReducer(doc: Doc, a: Action): Doc {
           if (d.id !== a.id || d.steps.length <= 1) return d
           return { ...d, steps: d.steps.filter((_, i) => i !== a.index) }
         }),
-      }
-    case 'DERIV_WIDTH':
-      return {
-        ...doc,
-        derivations: doc.derivations.map((d) =>
-          d.id === a.id ? { ...d, exprW: Math.max(2, d.exprW + a.delta) } : d,
-        ),
       }
     case 'MOVE_DERIV':
       return {
