@@ -5,7 +5,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react'
-import type { Doc, DiagEdge, Mode, Selection, Shape } from './types'
+import type { Doc, DiagEdge, TableLoop, Mode, Selection, Shape } from './types'
 import {
   GRID,
   center,
@@ -39,6 +39,11 @@ const OP: Record<string, string> = {
 }
 
 const OVERBAR = '̅' // combining overline — draws a bar over the preceding glyph
+
+// Two KV group loops overlap if their cell rectangles share any cell.
+function loopsOverlap(a: TableLoop, b: TableLoop): boolean {
+  return !(a.r2 < b.r1 || a.r1 > b.r2 || a.c2 < b.c1 || a.c1 > b.c2)
+}
 
 function opsToUnicode(s: string): string {
   return s
@@ -774,9 +779,11 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 }),
               )}
 
-              {/* KV group loops */}
-              {(tb.loops ?? []).map((lp, li) => {
-                const inset = 5 + (li % 4) * 4
+              {/* KV group loops — inset by overlap depth, so independent loops
+                  are identical and overlapping ones nest consistently */}
+              {(tb.loops ?? []).map((lp, li, arr) => {
+                const depth = arr.slice(0, li).filter((o) => loopsOverlap(o, lp)).length
+                const inset = 5 + depth * 6
                 const x1 = (tb.x + lp.c1 * tb.cw) * GRID + inset
                 const y1 = (tb.y + lp.r1) * GRID + inset
                 const w = (lp.c2 - lp.c1 + 1) * cw - 2 * inset

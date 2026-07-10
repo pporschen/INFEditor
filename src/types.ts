@@ -91,7 +91,9 @@ export interface DiagTable {
   inputCols?: number // truth tables: how many left columns are inputs
   math?: boolean // wrap cell contents in $…$ on LaTeX export
   loops?: TableLoop[] // KV/Karnaugh group markings
-  kv?: number // 3 or 4: render Veitch variable bars (x_i) along the axes
+  kv?: number // 3 or 4: KV map variable count (for the DNF/KNF form switch)
+  cellToggle?: boolean // clicking a value cell toggles 0/1 (KV maps)
+  form?: 'dnf' | 'knf' // KV map normal form (header labels + cell polarity)
 }
 
 // One line of a boolean-algebra derivation. Row 0 is the initial expression

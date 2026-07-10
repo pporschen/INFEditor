@@ -7,6 +7,7 @@ import { printA4 } from './printA4'
 import { GATES, GATE_ORDER } from './gates'
 import { GRID, W, H, PAGE_W } from './geometry'
 import { tableToLatex, derivToLatex } from './latex'
+import { kvHeaderRow, kvHeaderCol } from './kv'
 import type {
   Doc,
   DiagTable,
@@ -101,28 +102,25 @@ type TablePreset = 'blank' | 't2' | 't3' | 't4' | 'kv3' | 'kv4'
 function makeTable(id: string, x: number, y: number, preset: TablePreset): DiagTable {
   const base = { id, x, y, cw: 3, header: true }
   if (preset === 'kv3' || preset === 'kv4') {
-    // header cells spell out the variable combination for each column/row
-    // (Gray order); value cells stay empty for the user to fill.
-    const colHead = [
-      'x_1x_2',
-      'x_1\\overline{x}_2',
-      '\\overline{x}_1\\overline{x}_2',
-      '\\overline{x}_1x_2',
-    ]
-    const rowHead =
-      preset === 'kv3'
-        ? ['x_3', '\\overline{x}_3']
-        : [
-            'x_3x_4',
-            'x_3\\overline{x}_4',
-            '\\overline{x}_3\\overline{x}_4',
-            '\\overline{x}_3x_4',
-          ]
+    // DNF map: header cells spell out each column/row's minterm; value cells
+    // prefilled 0 for click-to-toggle. Switchable to KNF later.
+    const kv = preset === 'kv3' ? 3 : 4
+    const colHead = kvHeaderRow('dnf')
+    const rowHead = kvHeaderCol(kv, 'dnf')
     const cells = [
       ['', ...colHead],
-      ...rowHead.map((rl) => [rl, '', '', '', '']),
+      ...rowHead.map((rl) => [rl, '0', '0', '0', '0']),
     ]
-    return { ...base, cw: 2, cols: 5, rows: cells.length, cells }
+    return {
+      ...base,
+      cw: 2,
+      cols: 5,
+      rows: cells.length,
+      cells,
+      cellToggle: true,
+      kv,
+      form: 'dnf',
+    }
   }
   const n = preset === 't2' ? 2 : preset === 't3' ? 3 : preset === 't4' ? 4 : 0
   if (n > 0) {
@@ -483,6 +481,17 @@ export default function App() {
       return
     }
     if (mode !== 'select') return
+    // KV value cell (not a header): a click flips 0/1. The cell is still
+    // selected so you can type something else (e.g. "-") in the field.
+    const tbl = doc.tables.find((t) => t.id === id)
+    if (!loopMode && tbl?.cellToggle && row > 0 && col > 0) {
+      const cur = tbl.cells[row]?.[col] ?? ''
+      dispatch({ type: 'SET_TABLE_CELL', id, row, col, text: cur === '0' ? '1' : '0' })
+      returnModeRef.current = null
+      setSelection({ kind: 'table', id })
+      setCellSel({ id, row, col })
+      return
+    }
     // KV loop marking: pick two opposite corner cells
     if (loopMode && selectedTable && selectedTable.id === id) {
       if (!loopFirst) {
@@ -1474,6 +1483,33 @@ export default function App() {
                 Math $…$
               </button>
             </div>
+            {selectedTable.form && (
+              <>
+                <span className="group-title">Normal form</span>
+                <div className="curve-row">
+                  <button
+                    className={selectedTable.form === 'dnf' ? 'active' : ''}
+                    onClick={() =>
+                      selectedTable.form === 'knf' &&
+                      dispatch({ type: 'TOGGLE_TABLE_FORM', id: selectedTable.id })
+                    }
+                    title="Minterms — mark the 1-cells; product terms"
+                  >
+                    DNF
+                  </button>
+                  <button
+                    className={selectedTable.form === 'knf' ? 'active' : ''}
+                    onClick={() =>
+                      selectedTable.form === 'dnf' &&
+                      dispatch({ type: 'TOGGLE_TABLE_FORM', id: selectedTable.id })
+                    }
+                    title="Maxterms — mark the 0-cells; sum terms"
+                  >
+                    KNF
+                  </button>
+                </div>
+              </>
+            )}
             {selectedTable.inputCols && (
               <button
                 onClick={() => dispatch({ type: 'FILL_TABLE_INPUTS', id: selectedTable.id })}

@@ -1,4 +1,5 @@
 import { useReducer } from 'react'
+import { kvHeaderRow, kvHeaderCol } from './kv'
 import type {
   Doc,
   DiagNode,
@@ -46,6 +47,7 @@ export type Action =
   | { type: 'TABLE_WIDTH'; id: string; delta: number }
   | { type: 'TOGGLE_TABLE_HEADER'; id: string }
   | { type: 'TOGGLE_TABLE_MATH'; id: string }
+  | { type: 'TOGGLE_TABLE_FORM'; id: string }
   | { type: 'FILL_TABLE_INPUTS'; id: string }
   | { type: 'MOVE_TABLE'; id: string; x: number; y: number }
   | { type: 'DELETE_TABLE'; id: string }
@@ -329,6 +331,25 @@ function docReducer(doc: Doc, a: Action): Doc {
         tables: doc.tables.map((t) =>
           t.id === a.id ? { ...t, math: !t.math } : t,
         ),
+      }
+    case 'TOGGLE_TABLE_FORM':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) => {
+          if (t.id !== a.id || !t.kv || !t.form) return t
+          const form = t.form === 'dnf' ? 'knf' : 'dnf'
+          const colHead = kvHeaderRow(form)
+          const rowHead = kvHeaderCol(t.kv, form)
+          const cells = t.cells.map((row, r) =>
+            row.map((cell, c) => {
+              if (r === 0 && c === 0) return '' // corner
+              if (r === 0) return colHead[c - 1] ?? cell // header row
+              if (c === 0) return rowHead[r - 1] ?? cell // header column
+              return cell === '0' ? '1' : cell === '1' ? '0' : cell // flip value
+            }),
+          )
+          return { ...t, form, cells }
+        }),
       }
     case 'FILL_TABLE_INPUTS':
       return {
