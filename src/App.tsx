@@ -136,6 +136,7 @@ export default function App() {
   const { doc, canUndo, dispatch } = useEditor(loadInitial)
   const [mode, setMode] = useState<Mode>('node')
   const [shape, setShape] = useState<Shape>('circle')
+  const [textKind, setTextKind] = useState<'label' | 'text'>('label')
   const [selection, setSelection] = useState<Selection>(null)
   const [pendingFrom, setPendingFrom] = useState<string | null>(null)
   const [pendingCorner, setPendingCorner] = useState<{ x: number; y: number } | null>(
@@ -365,9 +366,9 @@ export default function App() {
         }
       }
     } else if (mode === 'text') {
-      // drop a text label, then focus it for immediate typing
+      // drop a text label / block, then focus it for immediate typing
       const id = crypto.randomUUID()
-      dispatch({ type: 'ADD_TEXT', id, x: gx, y: gy })
+      dispatch({ type: 'ADD_TEXT', id, x: gx, y: gy, kind: textKind })
       returnModeRef.current = 'text'
       setMode('select')
       setSelection({ kind: 'text', id })
@@ -983,6 +984,28 @@ export default function App() {
           </div>
         )}
 
+        {mode === 'text' && (
+          <div className="group">
+            <span className="group-title">Text type</span>
+            <div className="btn-grid">
+              <button
+                className={textKind === 'label' ? 'active' : ''}
+                onClick={() => setTextKind('label')}
+                title="Short label with math markup (x_1, \overline{}, …)"
+              >
+                Label
+              </button>
+              <button
+                className={textKind === 'text' ? 'active' : ''}
+                onClick={() => setTextKind('text')}
+                title="Multi-line plain text block"
+              >
+                Text field
+              </button>
+            </div>
+          </div>
+        )}
+
         {mode === 'table' && (
           <div className="group">
             <span className="group-title">Table type</span>
@@ -1121,7 +1144,10 @@ export default function App() {
             (pendingCorner
               ? 'Now dwell on the end point of the wire.'
               : 'Dwell on the start point of the wire. After drawing, use the buttons to nudge it by 1/4 cell.')}
-          {mode === 'text' && 'Dwell anywhere to drop a text label, then type it.'}
+          {mode === 'text' &&
+            `Dwell anywhere to drop a ${
+              textKind === 'text' ? 'multi-line text block' : 'label'
+            }, then type it.`}
           {mode === 'deriv' &&
             'Dwell to start a derivation, then type each line and reason. You do the algebra; it makes the LaTeX.'}
           {mode === 'table' &&
@@ -1387,7 +1413,70 @@ export default function App() {
             </div>
           </>
         )}
-        {selectedText && (
+        {selectedText && selectedText.kind === 'text' && (
+          <>
+            <label>
+              Text
+              <textarea
+                ref={attachLabel}
+                className="expr-input"
+                rows={6}
+                value={selectedText.text}
+                onChange={(e) =>
+                  dispatch({ type: 'SET_TEXT', id: selectedText.id, text: e.target.value })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.currentTarget.blur()
+                    setSelection(null)
+                  }
+                }}
+                autoFocus
+              />
+            </label>
+            <span className="group-title">Text options</span>
+            <div className="btn-grid">
+              <button onClick={() => dispatch({ type: 'SET_TEXT_SIZE', id: selectedText.id, delta: -0.2 })}>
+                A−
+              </button>
+              <button onClick={() => dispatch({ type: 'SET_TEXT_SIZE', id: selectedText.id, delta: 0.2 })}>
+                A＋
+              </button>
+              <button
+                className={selectedText.bold ? 'active' : ''}
+                onClick={() => dispatch({ type: 'TOGGLE_TEXT_BOLD', id: selectedText.id })}
+              >
+                Bold
+              </button>
+              <button
+                className={selectedText.align === 'center' ? 'active' : ''}
+                onClick={() =>
+                  dispatch({
+                    type: 'SET_TEXT_ALIGN',
+                    id: selectedText.id,
+                    align: selectedText.align === 'center' ? 'left' : 'center',
+                  })
+                }
+              >
+                {selectedText.align === 'center' ? 'Centered' : 'Left'}
+              </button>
+            </div>
+            <span className="group-title">Move (1/4 cell)</span>
+            <div className="dpad">
+              <span />
+              <button onClick={() => nudgeText(0, -LINE_STEP)}>↑</button>
+              <span />
+              <button onClick={() => nudgeText(-LINE_STEP, 0)}>←</button>
+              <span />
+              <button onClick={() => nudgeText(LINE_STEP, 0)}>→</button>
+              <span />
+              <button onClick={() => nudgeText(0, LINE_STEP)}>↓</button>
+              <span />
+            </div>
+            <p className="muted">Or dwell an empty cell (Select mode) to move it.</p>
+          </>
+        )}
+        {selectedText && selectedText.kind !== 'text' && (
           <>
             <label>
               Text
@@ -1663,7 +1752,7 @@ export default function App() {
         )}
         {((selectedNode && selectedNode.shape !== 'dot') ||
           selectedEdge ||
-          selectedText ||
+          (selectedText && selectedText.kind !== 'text') ||
           selectedLineId ||
           (selectedTable && cellSel) ||
           (selectedDeriv && derivStep != null)) && (

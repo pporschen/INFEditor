@@ -72,7 +72,9 @@ Live: **https://pporschen.github.io/INFEditor/**
   markers + dashing. `curve` on normal edges bows a quadratic bézier.
 - **DiagLine** `{id, x1,y1,x2,y2, arrow?, label?, labelPos?}` — free wires; coords are
   fractional (¼-cell nudge/resize buttons). Arrowheads start/end/both.
-- **DiagText** `{id, x, y, text}` — free text anywhere.
+- **DiagText** `{id, x, y, text, kind?, size?, align?, bold?}` — free text. `kind`
+  `'label'` = short math-markup label (renderRich, `\\` breaks); `'text'` = a
+  multi-line plain-text block (real newlines, size/align/bold options).
 - **DiagTable** `{id, x, y, cols, rows, cw, header, cells[][], inputCols?, math?, loops?}` —
   tables + truth-table shells. `math` wraps cells in `$…$` on export. `loops` are
   **KV/Karnaugh group markings** (`TableLoop {r1,c1,r2,c2,color,label}`): rounded

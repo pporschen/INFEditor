@@ -50,6 +50,13 @@ export function applyLightStyles(root: Element, ls: number) {
     'dominant-baseline': 'central',
     'font-family': 'sans-serif',
   })
+  // .text-block keeps its own inline font-size; just fix colour/baseline/family
+  setStyle(root, '.text-block', {
+    fill: LIGHT.ink,
+    'dominant-baseline': 'hanging',
+    'font-family': 'sans-serif',
+  })
+  setStyle(root, '.text-block.bold', { 'font-weight': '700' })
   setStyle(root, '.table-cell', { fill: LIGHT.bg, stroke: LIGHT.stroke, 'stroke-width': '1.5' })
   setStyle(root, '.table-cell.table-header', { fill: '#f0f2f7' })
   setStyle(root, '.table-text', {

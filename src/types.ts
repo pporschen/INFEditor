@@ -58,12 +58,17 @@ export interface DiagLine {
   labelPos?: LabelPos // where the label sits along the wire (default 'middle')
 }
 
-// A free-standing text label placed anywhere on the grid.
+// A free-standing text item. 'label' = short, math markup (renderRich, `\\`).
+// 'text' = a multi-line plain-text block (real newlines, no markup).
 export interface DiagText {
   id: string
   x: number
   y: number
   text: string
+  kind?: 'label' | 'text'
+  size?: number // font-size multiplier (default 1)
+  align?: 'left' | 'center'
+  bold?: boolean
 }
 
 // A KV/Karnaugh group loop: a rounded outline around a rectangular cell block

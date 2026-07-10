@@ -931,21 +931,47 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
         })}
       </g>
 
-      {/* free-standing text labels */}
+      {/* free-standing text: labels (markup) and multi-line plain text blocks */}
       <g {...hitProps}>
         {doc.texts.map((t) => {
           const selected = selection?.kind === 'text' && selection.id === t.id
+          const px = t.x * GRID
+          const py = t.y * GRID
+          if (t.kind === 'text') {
+            // multi-line plain text (real newlines); left/centre aligned
+            const lines = t.text ? t.text.split('\n') : ['Text…']
+            const anchor = t.align === 'center' ? 'middle' : 'start'
+            return (
+              <text
+                key={t.id}
+                x={px}
+                y={py}
+                onClick={() => onTextClick(t.id)}
+                textAnchor={anchor}
+                className={`text-block${selected ? ' selected' : ''}${
+                  t.text ? '' : ' placeholder'
+                }${t.bold ? ' bold' : ''}`}
+                style={{ fontSize: `calc(${16 * (t.size ?? 1)}px * var(--label-scale, 1))` }}
+              >
+                {lines.map((ln, i) => (
+                  <tspan key={i} x={px} dy={i === 0 ? 0 : '1.35em'}>
+                    {ln || ' '}
+                  </tspan>
+                ))}
+              </text>
+            )
+          }
           return (
             <text
               key={t.id}
-              x={t.x * GRID}
-              y={t.y * GRID}
+              x={px}
+              y={py}
               onClick={() => onTextClick(t.id)}
               className={`free-text${selected ? ' selected' : ''}${
                 t.text ? '' : ' placeholder'
               }`}
             >
-              {t.text ? renderLines(t.text, t.x * GRID) : 'Text…'}
+              {t.text ? renderLines(t.text, px) : 'Text…'}
             </text>
           )
         })}

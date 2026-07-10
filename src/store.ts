@@ -36,8 +36,11 @@ export type Action =
   | { type: 'SET_LINE_ARROW'; id: string; arrow: LineArrow }
   | { type: 'SET_LINE_LABEL'; id: string; label: string }
   | { type: 'SET_LINE_LABEL_POS'; id: string; pos: LabelPos }
-  | { type: 'ADD_TEXT'; id: string; x: number; y: number }
+  | { type: 'ADD_TEXT'; id: string; x: number; y: number; kind: 'label' | 'text' }
   | { type: 'SET_TEXT'; id: string; text: string }
+  | { type: 'SET_TEXT_SIZE'; id: string; delta: number }
+  | { type: 'SET_TEXT_ALIGN'; id: string; align: 'left' | 'center' }
+  | { type: 'TOGGLE_TEXT_BOLD'; id: string }
   | { type: 'MOVE_TEXT'; id: string; x: number; y: number }
   | { type: 'DELETE_TEXT'; id: string }
   | { type: 'ADD_TABLE'; table: DiagTable }
@@ -252,12 +255,41 @@ function docReducer(doc: Doc, a: Action): Doc {
     case 'ADD_TEXT':
       return {
         ...doc,
-        texts: [...doc.texts, { id: a.id, x: a.x, y: a.y, text: '' }],
+        texts: [
+          ...doc.texts,
+          {
+            id: a.id,
+            x: a.x,
+            y: a.y,
+            text: '',
+            kind: a.kind,
+            ...(a.kind === 'text' ? { size: 1, align: 'left' as const } : {}),
+          },
+        ],
       }
     case 'SET_TEXT':
       return {
         ...doc,
         texts: doc.texts.map((t) => (t.id === a.id ? { ...t, text: a.text } : t)),
+      }
+    case 'SET_TEXT_SIZE':
+      return {
+        ...doc,
+        texts: doc.texts.map((t) =>
+          t.id === a.id
+            ? { ...t, size: Math.max(0.6, Math.min(4, (t.size ?? 1) + a.delta)) }
+            : t,
+        ),
+      }
+    case 'SET_TEXT_ALIGN':
+      return {
+        ...doc,
+        texts: doc.texts.map((t) => (t.id === a.id ? { ...t, align: a.align } : t)),
+      }
+    case 'TOGGLE_TEXT_BOLD':
+      return {
+        ...doc,
+        texts: doc.texts.map((t) => (t.id === a.id ? { ...t, bold: !t.bold } : t)),
       }
     case 'MOVE_TEXT':
       return {

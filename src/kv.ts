@@ -17,7 +17,7 @@ function term(vars: number[], bits: number[], form: KvForm): string {
     return vars.map((v, i) => (bits[i] ? `x_${v}` : `\\overline{x}_${v}`)).join('')
   }
   const parts = vars.map((v, i) => (bits[i] ? `\\overline{x}_${v}` : `x_${v}`))
-  return parts.length > 1 ? `(${parts.join('+')})` : parts[0]
+  return parts.length > 1 ? `(${parts.join(' \\lor ')})` : parts[0]
 }
 
 // The 4 column headers (variables x_1, x_2).

@@ -322,6 +322,23 @@ button.active kbd {
   fill: var(--muted);
 }
 
+/* multi-line plain-text block */
+.text-block {
+  dominant-baseline: hanging;
+  fill: var(--ink);
+  cursor: pointer;
+}
+.text-block.bold {
+  font-weight: 700;
+}
+.text-block.placeholder {
+  fill: var(--muted);
+  font-style: italic;
+}
+.text-block.selected {
+  fill: var(--accent);
+}
+
 /* free-standing text label */
 .free-text {
   font-size: calc(16px * var(--label-scale, 1));
