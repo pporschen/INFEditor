@@ -125,6 +125,14 @@ Modes (keyboard): Select `s`, Node `p`, Connect `c`, Line `l`, Text `t`, Table
 - Two-corner drawing shows a live dashed preview (`pendingCorner`/`hoverCell`).
 - **Placement modes make geometry click-through** (`pointer-events:none`) so you
   can drop, e.g., a junction dot on a line intersection.
+- **Multi-select group move**: in Select mode, "Select multiple to move"
+  (`multiMode`) turns each dwell into an add/remove toggle on a `multi` ref set
+  (`{kind,id}`). Also **two empty-canvas dwells define a box** (`areaSelect`
+  preview) and `addItemsInRect` unions every item whose reference point (node
+  center, line midpoint, text/deriv anchor, table center) is inside. A Move
+  (1 cell) d-pad shifts them all via one `MOVE_MANY` action (one undo step).
+  Edges ride with their nodes. Leaving Select mode ends it. Canvas highlights
+  via a `multi` Set of `${kind}:${id}` keys.
 - **Cell/line keyboard nav**: table cells = Tab/Shift+Tab/Enter/↑/↓ (selects text
   for overwrite); derivation lines = ↑/↓/Enter.
 - **Auto-pan**: the active table cell / derivation line is panned into the top

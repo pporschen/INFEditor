@@ -241,6 +241,8 @@ interface Props {
   doc: Doc
   mode: Mode
   selection: Selection
+  multi: Set<string> // keys `${kind}:${id}` for group multi-select highlighting
+  areaSelect: boolean // group mode is on → two-corner area box selects items
   pendingFrom: string | null
   pendingCorner: { x: number; y: number } | null
   hoverCell: { x: number; y: number } | null
@@ -266,6 +268,8 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     doc,
     mode,
     selection,
+    multi,
+    areaSelect,
     pendingFrom,
     pendingCorner,
     hoverCell,
@@ -511,7 +515,9 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
       {/* free wire lines (under nodes/edges) */}
       <g {...hitProps}>
         {doc.lines.map((l) => {
-          const selected = selection?.kind === 'line' && selection.id === l.id
+          const selected =
+            (selection?.kind === 'line' && selection.id === l.id) ||
+            multi.has('line:' + l.id)
           const x1 = l.x1 * GRID
           const y1 = l.y1 * GRID
           const x2 = l.x2 * GRID
@@ -669,7 +675,9 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           const c = center(n)
           const { hw, hh } = halfExtents(n)
           const gate = n.gate ? GATES[n.gate] : null
-          const isSel = selection?.kind === 'node' && selection.id === n.id
+          const isSel =
+            (selection?.kind === 'node' && selection.id === n.id) ||
+            multi.has('node:' + n.id)
           const isPending = pendingFrom === n.id
           return (
             <g
@@ -756,7 +764,9 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
       {/* tables / truth tables */}
       <g>
         {doc.tables.map((tb) => {
-          const tableSel = selection?.kind === 'table' && selection.id === tb.id
+          const tableSel =
+            (selection?.kind === 'table' && selection.id === tb.id) ||
+            multi.has('table:' + tb.id)
           const cw = tb.cw * GRID
           const ch = GRID
           const px = tb.x * GRID
@@ -884,7 +894,9 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
       {/* boolean-algebra derivations (align* blocks) */}
       <g>
         {doc.derivations.map((d) => {
-          const dsel = selection?.kind === 'deriv' && selection.id === d.id
+          const dsel =
+            (selection?.kind === 'deriv' && selection.id === d.id) ||
+            multi.has('deriv:' + d.id)
           const relX = (d.x + 0.5) * GRID
           const exprX = (d.x + 1) * GRID
           const reasonX = (d.x + 1 + d.exprW) * GRID
@@ -976,7 +988,9 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
       {/* free-standing text: labels (markup) and multi-line plain text blocks */}
       <g {...hitProps}>
         {doc.texts.map((t) => {
-          const selected = selection?.kind === 'text' && selection.id === t.id
+          const selected =
+            (selection?.kind === 'text' && selection.id === t.id) ||
+            multi.has('text:' + t.id)
           const px = t.x * GRID
           const py = t.y * GRID
           if (t.kind === 'text') {
@@ -1034,6 +1048,15 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
             />
           )}
           {hoverCell && mode === 'table' && (
+            <rect
+              x={Math.min(pendingCorner.x, hoverCell.x) * GRID}
+              y={Math.min(pendingCorner.y, hoverCell.y) * GRID}
+              width={Math.abs(hoverCell.x - pendingCorner.x) * GRID}
+              height={Math.abs(hoverCell.y - pendingCorner.y) * GRID}
+              className="preview-box"
+            />
+          )}
+          {hoverCell && areaSelect && (
             <rect
               x={Math.min(pendingCorner.x, hoverCell.x) * GRID}
               y={Math.min(pendingCorner.y, hoverCell.y) * GRID}

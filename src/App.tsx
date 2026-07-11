@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from './Canvas'
 import type { View } from './Canvas'
 import { useEditor } from './store'
@@ -150,6 +150,10 @@ export default function App() {
   const [shape, setShape] = useState<Shape>('circle')
   const [textKind, setTextKind] = useState<'label' | 'text'>('label')
   const [selection, setSelection] = useState<Selection>(null)
+  // group multi-select: while `multiMode` is on, each dwell toggles a part into
+  // `multi` (refs `{kind,id}`) so several items can be nudged together.
+  const [multiMode, setMultiMode] = useState(false)
+  const [multi, setMulti] = useState<{ kind: string; id: string }[]>([])
   const [pendingFrom, setPendingFrom] = useState<string | null>(null)
   const [pendingCorner, setPendingCorner] = useState<{ x: number; y: number } | null>(
     null,
@@ -322,6 +326,24 @@ export default function App() {
   }
 
   function handleBgClick(gx: number, gy: number) {
+    // group mode: two empty-canvas dwells define a box; everything inside is
+    // added to the selection (individual item toggles still work alongside).
+    if (multiMode) {
+      if (pendingCorner === null) {
+        setPendingCorner({ x: gx, y: gy })
+        setHoverCell({ x: gx, y: gy })
+      } else {
+        addItemsInRect(
+          Math.min(pendingCorner.x, gx),
+          Math.min(pendingCorner.y, gy),
+          Math.max(pendingCorner.x, gx),
+          Math.max(pendingCorner.y, gy),
+        )
+        setPendingCorner(null)
+        setHoverCell(null)
+      }
+      return
+    }
     if (mode === 'node') {
       // Junction dots drop with a single dwell; stay in the mode to place more.
       if (shape === 'dot') {
@@ -458,13 +480,20 @@ export default function App() {
   }
 
   function handleBgMove(gx: number, gy: number) {
-    // only track the cursor while actively drawing a shape/line/table (scoped)
-    if ((mode === 'node' || mode === 'line' || mode === 'table') && pendingCorner) {
+    // track the cursor while drawing a shape/line/table or the group-select box
+    if (
+      ((mode === 'node' || mode === 'line' || mode === 'table') || multiMode) &&
+      pendingCorner
+    ) {
       setHoverCell((h) => (h && h.x === gx && h.y === gy ? h : { x: gx, y: gy }))
     }
   }
 
   function handleLineClick(id: string) {
+    if (multiMode) {
+      toggleMulti('line', id)
+      return
+    }
     if (mode === 'select') {
       returnModeRef.current = null
       setSelection({ kind: 'line', id })
@@ -475,6 +504,10 @@ export default function App() {
   }
 
   function handleTextClick(id: string) {
+    if (multiMode) {
+      toggleMulti('text', id)
+      return
+    }
     if (mode === 'select') {
       returnModeRef.current = null
       setSelection({ kind: 'text', id })
@@ -485,6 +518,10 @@ export default function App() {
   }
 
   function handleCellClick(id: string, row: number, col: number) {
+    if (multiMode) {
+      toggleMulti('table', id)
+      return
+    }
     if (mode === 'delete') {
       dispatch({ type: 'DELETE_TABLE', id })
       setSelection(null)
@@ -533,6 +570,10 @@ export default function App() {
   }
 
   function handleDerivRowClick(id: string, index: number) {
+    if (multiMode) {
+      toggleMulti('deriv', id)
+      return
+    }
     if (mode === 'delete') {
       dispatch({ type: 'DELETE_DERIV', id })
       setSelection(null)
@@ -561,6 +602,10 @@ export default function App() {
   }
 
   function handleNodeClick(id: string) {
+    if (multiMode) {
+      toggleMulti('node', id)
+      return
+    }
     if (mode === 'edge') {
       if (pendingFrom === null) {
         setPendingFrom(id)
@@ -584,6 +629,7 @@ export default function App() {
   }
 
   function handleEdgeClick(id: string) {
+    if (multiMode) return // edges follow their nodes; nothing to add to the group
     if (mode === 'select') {
       returnModeRef.current = null
       setSelection({ kind: 'edge', id })
@@ -636,6 +682,73 @@ export default function App() {
     if (!n) return
     dispatch({ type: 'MOVE_NODE', id: n.id, x: n.x + dx, y: n.y + dy })
   }
+
+  // group multi-select: set of `${kind}:${id}` keys for highlighting in Canvas
+  const multiSet = useMemo(
+    () => new Set(multi.map((r) => `${r.kind}:${r.id}`)),
+    [multi],
+  )
+
+  // toggle a part in/out of the group selection (used while multiMode is on)
+  function toggleMulti(kind: string, id: string) {
+    setMulti((prev) =>
+      prev.some((r) => r.kind === kind && r.id === id)
+        ? prev.filter((r) => !(r.kind === kind && r.id === id))
+        : [...prev, { kind, id }],
+    )
+  }
+
+  // add every item whose reference point falls inside the box to the group
+  // (union — existing group members and toggled items are kept)
+  function addItemsInRect(x1: number, y1: number, x2: number, y2: number) {
+    const inside = (px: number, py: number) =>
+      px >= x1 && px <= x2 && py >= y1 && py <= y2
+    const found: { kind: string; id: string }[] = []
+    for (const n of doc.nodes)
+      if (inside(n.x, n.y)) found.push({ kind: 'node', id: n.id })
+    for (const l of doc.lines)
+      if (inside((l.x1 + l.x2) / 2, (l.y1 + l.y2) / 2))
+        found.push({ kind: 'line', id: l.id })
+    for (const t of doc.texts)
+      if (inside(t.x, t.y)) found.push({ kind: 'text', id: t.id })
+    for (const tb of doc.tables)
+      if (inside(tb.x + (tb.cols * tb.cw) / 2, tb.y + tb.rows / 2))
+        found.push({ kind: 'table', id: tb.id })
+    for (const d of doc.derivations)
+      if (inside(d.x, d.y)) found.push({ kind: 'deriv', id: d.id })
+    setMulti((prev) => {
+      const have = new Set(prev.map((r) => `${r.kind}:${r.id}`))
+      return [...prev, ...found.filter((r) => !have.has(`${r.kind}:${r.id}`))]
+    })
+  }
+
+  // nudge every part in the group selection together, as one undo step
+  function moveMulti(dx: number, dy: number) {
+    if (multi.length === 0) return
+    dispatch({ type: 'MOVE_MANY', refs: multi, dx, dy })
+  }
+
+  function startMultiSelect() {
+    setSelection(null)
+    setMode('select')
+    setMulti([])
+    setPendingCorner(null)
+    setHoverCell(null)
+    setMultiMode(true)
+  }
+
+  function endMultiSelect() {
+    setMultiMode(false)
+    setMulti([])
+    setPendingCorner(null)
+    setHoverCell(null)
+  }
+
+  // leaving Select mode abandons an in-progress group selection
+  useEffect(() => {
+    if (mode !== 'select' && multiMode) endMultiSelect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
 
   // nudge a text label by a fraction of a cell (same step as wires)
   function nudgeText(dx: number, dy: number) {
@@ -1187,6 +1300,8 @@ export default function App() {
           doc={doc}
           mode={mode}
           selection={selection}
+          multi={multiSet}
+          areaSelect={multiMode}
           pendingFrom={pendingFrom}
           pendingCorner={pendingCorner}
           hoverCell={hoverCell}
@@ -1879,10 +1994,41 @@ export default function App() {
             ✓ Done
           </button>
         )}
-        {!selection && (
-          <p className="muted">
-            Select something (Select mode) to edit its label and properties.
-          </p>
+        {!selection && multiMode && (
+          <>
+            <span className="group-title">Group move ({multi.length})</span>
+            {multi.length > 0 ? (
+              <>
+                <span className="group-title">Move (1 cell)</span>
+                <div className="dpad">
+                  <span />
+                  <button onClick={() => moveMulti(0, -1)}>↑</button>
+                  <span />
+                  <button onClick={() => moveMulti(-1, 0)}>←</button>
+                  <span />
+                  <button onClick={() => moveMulti(1, 0)}>→</button>
+                  <span />
+                  <button onClick={() => moveMulti(0, 1)}>↓</button>
+                  <span />
+                </div>
+                <button onClick={() => setMulti([])}>Clear selection</button>
+              </>
+            ) : (
+              <p className="muted">
+                Dwell two empty-canvas corners to grab everything inside, or
+                dwell parts one by one (dwell again to remove).
+              </p>
+            )}
+            <button onClick={endMultiSelect}>Done</button>
+          </>
+        )}
+        {!selection && !multiMode && (
+          <>
+            <p className="muted">
+              Select something (Select mode) to edit its label and properties.
+            </p>
+            <button onClick={startMultiSelect}>Select multiple to move</button>
+          </>
         )}
       </aside>
     </div>

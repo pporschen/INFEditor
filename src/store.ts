@@ -64,6 +64,7 @@ export type Action =
   | { type: 'ADD_DERIV_STEP'; id: string; after: number }
   | { type: 'DEL_DERIV_STEP'; id: string; index: number }
   | { type: 'MOVE_DERIV'; id: string; x: number; y: number }
+  | { type: 'MOVE_MANY'; refs: { kind: string; id: string }[]; dx: number; dy: number }
   | { type: 'DELETE_DERIV'; id: string }
   | { type: 'SET_PAGES'; count: number }
   | { type: 'SET_NODE_LABEL'; id: string; label: string }
@@ -512,6 +513,38 @@ function docReducer(doc: Doc, a: Action): Doc {
           d.id === a.id ? { ...d, x: a.x, y: a.y } : d,
         ),
       }
+    case 'MOVE_MANY': {
+      // shift several items by the same (dx, dy) in one history entry. Edges
+      // ride along with their nodes, so only free-moving items are listed.
+      const ids = (k: string) =>
+        new Set(a.refs.filter((r) => r.kind === k).map((r) => r.id))
+      const nodeIds = ids('node')
+      const lineIds = ids('line')
+      const textIds = ids('text')
+      const tableIds = ids('table')
+      const derivIds = ids('deriv')
+      const { dx, dy } = a
+      return {
+        ...doc,
+        nodes: doc.nodes.map((n) =>
+          nodeIds.has(n.id) ? { ...n, x: n.x + dx, y: n.y + dy } : n,
+        ),
+        lines: doc.lines.map((l) =>
+          lineIds.has(l.id)
+            ? { ...l, x1: l.x1 + dx, y1: l.y1 + dy, x2: l.x2 + dx, y2: l.y2 + dy }
+            : l,
+        ),
+        texts: doc.texts.map((t) =>
+          textIds.has(t.id) ? { ...t, x: t.x + dx, y: t.y + dy } : t,
+        ),
+        tables: doc.tables.map((t) =>
+          tableIds.has(t.id) ? { ...t, x: t.x + dx, y: t.y + dy } : t,
+        ),
+        derivations: doc.derivations.map((d) =>
+          derivIds.has(d.id) ? { ...d, x: d.x + dx, y: d.y + dy } : d,
+        ),
+      }
+    }
     case 'DELETE_DERIV':
       return { ...doc, derivations: doc.derivations.filter((d) => d.id !== a.id) }
     case 'SET_PAGES':
