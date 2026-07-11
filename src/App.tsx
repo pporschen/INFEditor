@@ -54,6 +54,8 @@ function boolConvert(s: string, atEnd: boolean): string {
     .replace(/\bnor\b/g, '\\overline{\\lor} ')
     .replace(/\bxnor\b/g, '\\overline{\\oplus} ')
     .replace(/\bxor\b/g, '\\oplus ')
+    .replace(/\bimplies\b/g, '\\Rightarrow ')
+    .replace(/\biff\b/g, '\\Leftrightarrow ')
     .replace(/\band\b/g, '\\land ')
     .replace(/\bor\b/g, '\\lor ')
     .replace(new RegExp('\\bnot\\s+(\\([^)]*\\)|\\S+)' + notEnd, 'g'), '\\overline{$1}')
@@ -628,6 +630,14 @@ export default function App() {
 
   function setLineLabelPos(id: string, pos: LabelPos) {
     dispatch({ type: 'SET_LINE_LABEL_POS', id, pos })
+  }
+
+  // nudge the selected node (used for junction dots) by a fraction of a cell
+  function nudgeNode(dx: number, dy: number) {
+    if (selection?.kind !== 'node') return
+    const n = doc.nodes.find((x) => x.id === selection.id)
+    if (!n) return
+    dispatch({ type: 'MOVE_NODE', id: n.id, x: n.x + dx, y: n.y + dy })
   }
 
   // nudge a text label by a fraction of a cell (same step as wires)
@@ -1224,7 +1234,21 @@ export default function App() {
               </label>
             )}
             {selectedNode.shape === 'dot' && (
-              <p className="muted">Junction dot — move or delete it.</p>
+              <>
+                <span className="group-title">Move (1/4 cell)</span>
+                <div className="dpad">
+                  <span />
+                  <button onClick={() => nudgeNode(0, -LINE_STEP)}>↑</button>
+                  <span />
+                  <button onClick={() => nudgeNode(-LINE_STEP, 0)}>←</button>
+                  <span />
+                  <button onClick={() => nudgeNode(LINE_STEP, 0)}>→</button>
+                  <span />
+                  <button onClick={() => nudgeNode(0, LINE_STEP)}>↓</button>
+                  <span />
+                </div>
+                <p className="muted">Or dwell an empty cell to move it.</p>
+              </>
             )}
             {selectedNode.shape === 'circle' && (
               <>
@@ -1814,6 +1838,13 @@ export default function App() {
                 title="XOR  \oplus"
               >
                 ⊕ XOR
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => insertText('\\Rightarrow ')}
+                title="Implies  \Rightarrow"
+              >
+                ⇒ Impl
               </button>
               <button
                 onMouseDown={(e) => e.preventDefault()}

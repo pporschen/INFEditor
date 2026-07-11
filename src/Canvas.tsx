@@ -36,6 +36,10 @@ const OP: Record<string, string> = {
   vee: '∨',
   land: '∧',
   wedge: '∧',
+  Rightarrow: '⇒',
+  implies: '⇒',
+  Leftrightarrow: '⇔',
+  iff: '⇔',
 }
 
 const OVERBAR = '̅' // combining overline — draws a bar over the preceding glyph
@@ -106,7 +110,7 @@ function renderRich(s: string): ReactNode {
     const ch = s[i]
     if (ch === '\\') {
       const m =
-        /^\\(overline|bar|cdot|oplus|lnot|neg|lor|vee|land|wedge|left|right)/.exec(
+        /^\\(overline|bar|cdot|oplus|lnot|neg|lor|vee|land|wedge|left|right|Rightarrow|implies|Leftrightarrow|iff)/.exec(
           s.slice(i),
         )
       if (m) {
@@ -311,11 +315,15 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     return { xs, ys }
   }
   const major = gridLines(GRID)
+  const selDot =
+    selection?.kind === 'node' && nodeById.get(selection.id)?.shape === 'dot'
   const showSubGrid =
     mode === 'line' ||
     mode === 'text' ||
+    (mode === 'node' && drawShape === 'dot') ||
     selection?.kind === 'line' ||
-    selection?.kind === 'text'
+    selection?.kind === 'text' ||
+    selDot
 
   function toCell(e: React.MouseEvent<SVGRectElement>): { gx: number; gy: number } | null {
     const svg = (e.currentTarget.ownerSVGElement ?? null) as SVGSVGElement | null
