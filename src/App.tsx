@@ -27,10 +27,20 @@ const LOOP_SIZE_MIN = -18 // clamp for self-loop extra size (keeps a visible loo
 const LOOP_SIZE_MAX = 160
 const LOOP_ANGLE_STEP = 30 // degrees the loop rotates per button press
 const LINE_STEP = 1 / 4 // 1/4 of a grid cell — nudge/resize step for wires
+// ordered so consecutive groups contrast strongly (hues jump around the wheel)
 const LOOP_COLORS = [
-  '#ef4444', '#f97316', '#f59e0b', '#eab308',
-  '#84cc16', '#22c55e', '#14b8a6', '#06b6d4',
-  '#3b82f6', '#6366f1', '#a855f7', '#ec4899',
+  '#e6194b', // red
+  '#3b82f6', // blue
+  '#22c55e', // green
+  '#f97316', // orange
+  '#a855f7', // purple
+  '#06b6d4', // cyan
+  '#ec4899', // magenta
+  '#ca8a04', // gold
+  '#14b8a6', // teal
+  '#6366f1', // indigo
+  '#84cc16', // lime
+  '#92400e', // brown
 ]
 
 // Auto-convert typed operator words to LaTeX. Whole-word only; results

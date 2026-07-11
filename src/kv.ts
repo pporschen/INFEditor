@@ -3,14 +3,14 @@
 //  KNF: maxterm sums — 1 → \overline{x}_i, 0 → x_i, joined by '+' in parens.
 export type KvForm = 'dnf' | 'knf'
 
-// Gray-code assignments (must match the KV template column/row order).
+// Gray-code assignments, starting at the all-negated corner (00 → 01 → 11 → 10).
 const GRAY2 = [
-  [1, 1],
-  [1, 0],
   [0, 0],
   [0, 1],
+  [1, 1],
+  [1, 0],
 ]
-const GRAY1 = [[1], [0]]
+const GRAY1 = [[0], [1]]
 
 function term(vars: number[], bits: number[], form: KvForm): string {
   if (form === 'dnf') {
@@ -20,14 +20,14 @@ function term(vars: number[], bits: number[], form: KvForm): string {
   return parts.length > 1 ? `(${parts.join(' \\lor ')})` : parts[0]
 }
 
-// The 4 column headers (variables x_1, x_2).
+// The 4 column headers, higher variable first: x_2 then x_1.
 export function kvHeaderRow(form: KvForm): string[] {
-  return GRAY2.map((bits) => term([1, 2], bits, form))
+  return GRAY2.map((bits) => term([2, 1], bits, form))
 }
 
-// The row headers: x_3 for KV3, x_3 x_4 for KV4.
+// The row headers, higher variable first: x_3 for KV3, x_4 x_3 for KV4.
 export function kvHeaderCol(kv: number, form: KvForm): string[] {
   return kv === 3
     ? GRAY1.map((b) => term([3], b, form))
-    : GRAY2.map((b) => term([3, 4], b, form))
+    : GRAY2.map((b) => term([4, 3], b, form))
 }
