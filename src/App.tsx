@@ -362,19 +362,16 @@ export default function App() {
         setPendingCorner(null)
         setHoverCell(null)
         if (pendingCorner.x !== gx || pendingCorner.y !== gy) {
-          // create the wire, then select it so its move/length buttons appear
-          const id = crypto.randomUUID()
+          // create the wire and stay in Line mode to draw the next one right
+          // away (edit it later via Select mode)
           dispatch({
             type: 'ADD_LINE',
-            id,
+            id: crypto.randomUUID(),
             x1: pendingCorner.x,
             y1: pendingCorner.y,
             x2: gx,
             y2: gy,
           })
-          returnModeRef.current = 'line'
-          setMode('select')
-          setSelection({ kind: 'line', id })
         }
       }
     } else if (mode === 'text') {
@@ -1163,7 +1160,7 @@ export default function App() {
           {mode === 'line' &&
             (pendingCorner
               ? 'Now dwell on the end point of the wire.'
-              : 'Dwell on the start point of the wire. After drawing, use the buttons to nudge it by 1/4 cell.')}
+              : 'Dwell start then end; keep drawing. Select a wire (Select mode) to edit it.')}
           {mode === 'text' &&
             `Dwell anywhere to drop a ${
               textKind === 'text' ? 'multi-line text block' : 'label'

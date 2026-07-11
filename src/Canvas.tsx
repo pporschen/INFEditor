@@ -334,7 +334,12 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     const ctm = svg.getScreenCTM()
     if (!ctm) return null
     const p = pt.matrixTransform(ctm.inverse())
-    return { gx: Math.round(p.x / GRID), gy: Math.round(p.y / GRID) }
+    // snap to the fine 1/4 grid when it's showing (dots/wires/text), else cells
+    const step = showSubGrid ? 0.25 : 1
+    return {
+      gx: Math.round(p.x / GRID / step) * step,
+      gy: Math.round(p.y / GRID / step) * step,
+    }
   }
 
   function handleBg(e: React.MouseEvent<SVGRectElement>) {
@@ -511,13 +516,16 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           const y1 = l.y1 * GRID
           const x2 = l.x2 * GRID
           const y2 = l.y2 * GRID
-          // label anchor along the line, nudged to one side so it clears the wire
+          // anchor the label at the actual endpoint (or midpoint) — not a
+          // fraction along the line — so start/end stay at the very tip
+          // regardless of the wire's length, nudged aside to clear the wire
           const pos = l.labelPos ?? 'middle'
-          const t = pos === 'start' ? 0.12 : pos === 'end' ? 0.88 : 0.5
           const len = Math.hypot(x2 - x1, y2 - y1) || 1
           const off = 9
-          const lx = x1 + (x2 - x1) * t + (-(y2 - y1) / len) * off
-          const ly = y1 + (y2 - y1) * t + ((x2 - x1) / len) * off
+          const ax = pos === 'start' ? x1 : pos === 'end' ? x2 : (x1 + x2) / 2
+          const ay = pos === 'start' ? y1 : pos === 'end' ? y2 : (y1 + y2) / 2
+          const lx = ax + (-(y2 - y1) / len) * off
+          const ly = ay + ((x2 - x1) / len) * off
           return (
             <g key={l.id} onClick={() => onLineClick(l.id)} className="edge">
               <line x1={x1} y1={y1} x2={x2} y2={y2} className="edge-hit" />
