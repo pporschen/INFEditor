@@ -48,6 +48,7 @@ export type Action =
   | { type: 'TABLE_ROWS'; id: string; delta: number }
   | { type: 'TABLE_COLS'; id: string; delta: number }
   | { type: 'TABLE_WIDTH'; id: string; delta: number }
+  | { type: 'QM_VARS'; id: string; delta: number }
   | { type: 'TOGGLE_TABLE_HEADER'; id: string }
   | { type: 'TOGGLE_TABLE_MATH'; id: string }
   | { type: 'TOGGLE_TABLE_FORM'; id: string }
@@ -324,8 +325,13 @@ function docReducer(doc: Doc, a: Action): Doc {
         tables: doc.tables.map((t) => {
           if (t.id !== a.id) return t
           const rows = Math.max(1, t.rows + a.delta)
-          let cells = t.cells.slice(0, rows)
-          while (cells.length < rows) cells.push(Array(t.cols).fill(''))
+          const cells = t.cells.slice(0, rows)
+          while (cells.length < rows) {
+            const row = Array(t.cols).fill('')
+            // QM combination tables: keep the bit columns prefilled with 0
+            if (t.checkCol != null) for (let c = 1; c <= t.cols - 3; c++) row[c] = '0'
+            cells.push(row)
+          }
           return { ...t, rows, cells }
         }),
       }
@@ -342,6 +348,29 @@ function docReducer(doc: Doc, a: Action): Doc {
           })
           const inputCols = t.inputCols ? Math.min(t.inputCols, cols) : t.inputCols
           return { ...t, cols, cells, inputCols }
+        }),
+      }
+    case 'QM_VARS':
+      // add/remove a variable (bit) column in a QM combination table. The bit
+      // block sits between the Dez. column and the ✓/Gruppe columns; adding
+      // inserts a new highest bit at its left and relabels x_n…x_1.
+      return {
+        ...doc,
+        tables: doc.tables.map((t) => {
+          if (t.id !== a.id || t.checkCol == null) return t
+          const vars = t.cols - 3 // Dez. + ✓ + Gruppe are the 3 fixed columns
+          const next = Math.max(2, Math.min(6, vars + a.delta))
+          if (next === vars) return t
+          const cells = t.cells.map((row, r) => {
+            if (r === 0) return row // header rebuilt below
+            const copy = row.slice()
+            if (a.delta > 0) copy.splice(1, 0, '0') // new bit column (prefilled 0)
+            else copy.splice(1, 1) // drop the leftmost (highest) bit column
+            return copy
+          })
+          const bits = Array.from({ length: next }, (_, i) => `x_${next - i}`)
+          cells[0] = ['Dez.', ...bits, '', 'Gruppe']
+          return { ...t, cols: next + 3, cells, checkCol: next + 1 }
         }),
       }
     case 'TABLE_WIDTH':

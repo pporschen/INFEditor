@@ -100,6 +100,7 @@ export interface DiagTable {
   loops?: TableLoop[] // KV/Karnaugh group markings
   kv?: number // 3 or 4: KV map variable count (for the DNF/KNF form switch)
   cellToggle?: boolean // clicking a value cell toggles 0/1 (KV maps)
+  checkCol?: number // body cells in this column toggle empty/✓ on click (QM ✓)
   form?: 'dnf' | 'knf' // KV map normal form (header labels + cell polarity)
 }
 

@@ -58,6 +58,7 @@ export function applyLightStyles(root: Element, ls: number) {
   })
   setStyle(root, '.text-block.bold', { 'font-weight': '700' })
   setStyle(root, '.table-cell', { fill: LIGHT.bg, stroke: LIGHT.stroke, 'stroke-width': '1.5' })
+  setStyle(root, '.qm-group-sep', { stroke: LIGHT.stroke, 'stroke-width': '3' })
   setStyle(root, '.table-cell.table-header', { fill: '#f0f2f7' })
   setStyle(root, '.table-text', {
     fill: LIGHT.ink,

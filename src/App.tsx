@@ -101,7 +101,7 @@ function loadInitial(): Doc {
   return normalizeDoc(null)
 }
 
-type TablePreset = 'blank' | 't2' | 't3' | 't4' | 'kv3' | 'kv4'
+type TablePreset = 'blank' | 't2' | 't3' | 't4' | 'kv3' | 'kv4' | 'qmc' | 'qmp'
 
 // Build a fresh table from a preset. Truth tables get n input columns + one
 // output column and 2^n rows; KV maps get the Gray-code grid + variable-group
@@ -128,6 +128,33 @@ function makeTable(id: string, x: number, y: number, preset: TablePreset): DiagT
       kv,
       form: 'dnf',
     }
+  }
+  // Quine-McCluskey combination worksheet (German row-per-term layout):
+  //   Dez. | x_n … x_1 | ✓ | Gruppe
+  // One row per minterm/implicant — decimal index, the bits (write 0/1/- as you
+  // combine), a check column, and the group (number of 1s). Starts at 4 vars;
+  // add/remove variable columns with QM_VARS. Purely a blank scaffold; the
+  // student does every grouping and combination by hand.
+  if (preset === 'qmc') {
+    const vars = 4
+    const bits = Array.from({ length: vars }, (_, i) => `x_${vars - i}`) // x4…x1
+    const head = ['Dez.', ...bits, '', 'Gruppe']
+    const cols = head.length
+    // start with a single body row; Enter in a cell appends more
+    const row0 = Array(cols).fill('')
+    for (let c = 1; c <= vars; c++) row0[c] = '0' // bit cells prefilled 0
+    return { ...base, cw: 1.5, cols, rows: 2, cells: [head, row0], checkCol: vars + 1 }
+  }
+  // Prime-implicant chart: rows = the prime implicants you found, columns = the
+  // minterms to cover. Corner labels the axes; the rest is blank for ticking
+  // coverage and circling essentials by hand.
+  if (preset === 'qmp') {
+    const mcols = 8 // minterm columns (add/remove with the table controls)
+    const cols = 1 + mcols
+    const head = ['PI / m_i', ...Array(mcols).fill('')]
+    const bodyRows = 8 // prime-implicant rows
+    const cells = [head, ...Array.from({ length: bodyRows }, () => Array(cols).fill(''))]
+    return { ...base, cw: 1.5, cols, rows: cells.length, cells }
   }
   const n = preset === 't2' ? 2 : preset === 't3' ? 3 : preset === 't4' ? 4 : 0
   if (n > 0) {
@@ -563,6 +590,25 @@ export default function App() {
       setCellSel({ id, row, col })
       return
     }
+    // QM check column: a click toggles the cell between empty and a checkmark
+    if (!loopMode && tbl?.checkCol === col && row > 0) {
+      const cur = tbl.cells[row]?.[col] ?? ''
+      dispatch({ type: 'SET_TABLE_CELL', id, row, col, text: cur === '✓' ? '' : '✓' })
+      returnModeRef.current = null
+      setSelection({ kind: 'table', id })
+      setCellSel({ id, row, col })
+      return
+    }
+    // QM bit columns (between Dez. and the ✓ column): cycle 0 → 1 → - → 0
+    if (!loopMode && tbl?.checkCol != null && row > 0 && col >= 1 && col <= tbl.cols - 3) {
+      const cur = tbl.cells[row]?.[col] ?? ''
+      const next = cur === '0' ? '1' : cur === '1' ? '-' : '0'
+      dispatch({ type: 'SET_TABLE_CELL', id, row, col, text: next })
+      returnModeRef.current = null
+      setSelection({ kind: 'table', id })
+      setCellSel({ id, row, col })
+      return
+    }
     // KV loop marking: pick two opposite corner cells
     if (loopMode && selectedTable && selectedTable.id === id) {
       if (!loopFirst) {
@@ -946,6 +992,16 @@ export default function App() {
         }
         break
       case 'Enter':
+        e.preventDefault()
+        // QM combination table: Enter at the last row appends a new row and
+        // steps into it, so the table grows as you fill it in.
+        if (selectedTable.checkCol != null && row === rows - 1) {
+          dispatch({ type: 'TABLE_ROWS', id: cellSel.id, delta: 1 })
+          row = row + 1 // step into the newly appended row
+        } else {
+          row = Math.min(rows - 1, row + 1)
+        }
+        break
       case 'ArrowDown':
         e.preventDefault()
         row = Math.min(rows - 1, row + 1)
@@ -1171,6 +1227,8 @@ export default function App() {
                   ['t4', 'Truth 4'],
                   ['kv3', 'KV 3-var'],
                   ['kv4', 'KV 4-var'],
+                  ['qmc', 'QM comb.'],
+                  ['qmp', 'QM PI chart'],
                 ] as [TablePreset, string][]
               ).map(([p, label]) => (
                 <button
@@ -1725,7 +1783,9 @@ export default function App() {
                 />
               </label>
             )}
-            <span className="group-title">Rows / Columns</span>
+            <span className="group-title">
+              {selectedTable.checkCol != null ? 'Rows / variables' : 'Rows / Columns'}
+            </span>
             <div className="btn-grid">
               <button onClick={() => dispatch({ type: 'TABLE_ROWS', id: selectedTable.id, delta: 1 })}>
                 Row +
@@ -1733,12 +1793,25 @@ export default function App() {
               <button onClick={() => dispatch({ type: 'TABLE_ROWS', id: selectedTable.id, delta: -1 })}>
                 Row −
               </button>
-              <button onClick={() => dispatch({ type: 'TABLE_COLS', id: selectedTable.id, delta: 1 })}>
-                Col +
-              </button>
-              <button onClick={() => dispatch({ type: 'TABLE_COLS', id: selectedTable.id, delta: -1 })}>
-                Col −
-              </button>
+              {selectedTable.checkCol != null ? (
+                <>
+                  <button onClick={() => dispatch({ type: 'QM_VARS', id: selectedTable.id, delta: 1 })}>
+                    Var +
+                  </button>
+                  <button onClick={() => dispatch({ type: 'QM_VARS', id: selectedTable.id, delta: -1 })}>
+                    Var −
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => dispatch({ type: 'TABLE_COLS', id: selectedTable.id, delta: 1 })}>
+                    Col +
+                  </button>
+                  <button onClick={() => dispatch({ type: 'TABLE_COLS', id: selectedTable.id, delta: -1 })}>
+                    Col −
+                  </button>
+                </>
+              )}
             </div>
             <span className="group-title">Cell width</span>
             <div className="curve-row">

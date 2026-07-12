@@ -260,6 +260,11 @@ button.active kbd {
   stroke: var(--accent);
   stroke-width: 2.5;
 }
+.qm-group-sep {
+  stroke: var(--ink);
+  stroke-width: 3;
+  pointer-events: none;
+}
 .table-text {
   font-size: calc(15px * var(--label-scale, 1));
   text-anchor: middle;

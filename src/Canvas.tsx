@@ -825,6 +825,28 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 }),
               )}
 
+              {/* QM combination table: bold divider wherever the Gruppe column
+                  (rightmost) value changes between adjacent rows — a formatting
+                  cue driven purely by what the user typed */}
+              {tb.checkCol != null &&
+                tb.cells.slice(1, -1).map((_, i) => {
+                  const r = i + 1 // row index within the body (skip header)
+                  const g1 = (tb.cells[r]?.[tb.cols - 1] ?? '').trim()
+                  const g2 = (tb.cells[r + 1]?.[tb.cols - 1] ?? '').trim()
+                  if (!g1 || !g2 || g1 === g2) return null
+                  const ly = py + (r + 1) * ch
+                  return (
+                    <line
+                      key={`grp-${r}`}
+                      x1={px}
+                      y1={ly}
+                      x2={px + tb.cols * cw}
+                      y2={ly}
+                      className="qm-group-sep"
+                    />
+                  )
+                })}
+
               {/* KV group loops — inset by overlap depth; a wrap group is drawn
                   as mirrored pieces that arc past the opposite edge */}
               {(tb.loops ?? []).map((lp, li, arr) => {

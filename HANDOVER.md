@@ -83,7 +83,14 @@ Live: **https://pporschen.github.io/INFEditor/**
   their colour in export/print (not light-baked). `kv` (3|4) makes it a **Veitch
   diagram**: a pure value grid with `x_i` variable **bars** along the axes
   (`KV_SPEC` in Canvas.tsx), no binary codes — the German KV-Diagramm style.
-  Table presets: `blank` (2-corner draw), `t2/t3/t4` (truth shells), `kv3/kv4`.
+  Table presets: `blank` (2-corner draw), `t2/t3/t4` (truth shells), `kv3/kv4`,
+  and **Quine-McCluskey worksheets** `qmc` (combination table, German
+  row-per-term layout: `Dez. | x_n…x_1 | ✓ | Gruppe`, starts at 4 vars; the
+  inspector shows Var +/- (`QM_VARS`) to add/remove bit columns and relabel;
+  `checkCol` makes the ✓ column click-toggle empty/✓) and `qmp` (prime-implicant
+  chart: `PI / m_i` corner, blank PI rows × minterm cols).
+  QM worksheets are **empty scaffolds only** — per the never-solve rule the tool
+  draws structure and the student does all grouping/combining/selection by hand.
 - **DiagDerivation** `{id, x, y, exprW, steps: {rel, expr, reason}[]}` — boolean-algebra
   derivation → `align*`. Step 0 is the initial expression.
 - **pages: number** — count of stacked A4 pages.
