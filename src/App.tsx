@@ -149,12 +149,10 @@ function makeTable(id: string, x: number, y: number, preset: TablePreset): DiagT
   // minterms to cover. Corner labels the axes; the rest is blank for ticking
   // coverage and circling essentials by hand.
   if (preset === 'qmp') {
-    const mcols = 8 // minterm columns (add/remove with the table controls)
-    const cols = 1 + mcols
-    const head = ['PI / m_i', ...Array(mcols).fill('')]
-    const bodyRows = 8 // prime-implicant rows
-    const cells = [head, ...Array.from({ length: bodyRows }, () => Array(cols).fill(''))]
-    return { ...base, cw: 1.5, cols, rows: cells.length, cells }
+    // start as a 2×2 shell; Enter adds a row, Tab adds a column. Decimals go
+    // across the top row, prime-implicant terms down the left column.
+    const cells = Array.from({ length: 2 }, () => Array(2).fill(''))
+    return { ...base, cw: 1.5, cols: 2, rows: 2, cells, pi: true }
   }
   const n = preset === 't2' ? 2 : preset === 't3' ? 3 : preset === 't4' ? 4 : 0
   if (n > 0) {
@@ -609,6 +607,17 @@ export default function App() {
       setCellSel({ id, row, col })
       return
     }
+    // PI chart: a coverage cell cycles empty → X → circled X (essential) → empty.
+    // Circled X is stored as 'Ⓧ'; the circle is drawn around the X in Canvas.
+    if (!loopMode && tbl?.pi && row > 0 && col > 0) {
+      const cur = tbl.cells[row]?.[col] ?? ''
+      const next = cur === 'X' ? 'Ⓧ' : cur === 'Ⓧ' ? '' : 'X'
+      dispatch({ type: 'SET_TABLE_CELL', id, row, col, text: next })
+      returnModeRef.current = null
+      setSelection({ kind: 'table', id })
+      setCellSel({ id, row, col })
+      return
+    }
     // KV loop marking: pick two opposite corner cells
     if (loopMode && selectedTable && selectedTable.id === id) {
       if (!loopFirst) {
@@ -983,6 +992,10 @@ export default function App() {
             col = cols - 1
             row = (row - 1 + rows) % rows
           }
+        } else if (selectedTable.pi && col === cols - 1) {
+          // PI chart: Tab at the last column appends a new column and steps in
+          dispatch({ type: 'TABLE_COLS', id: cellSel.id, delta: 1 })
+          col = col + 1
         } else {
           col++
           if (col >= cols) {
@@ -993,9 +1006,8 @@ export default function App() {
         break
       case 'Enter':
         e.preventDefault()
-        // QM combination table: Enter at the last row appends a new row and
-        // steps into it, so the table grows as you fill it in.
-        if (selectedTable.checkCol != null && row === rows - 1) {
+        // QM tables grow on Enter: at the last row, append one and step into it.
+        if ((selectedTable.checkCol != null || selectedTable.pi) && row === rows - 1) {
           dispatch({ type: 'TABLE_ROWS', id: cellSel.id, delta: 1 })
           row = row + 1 // step into the newly appended row
         } else {
@@ -1782,6 +1794,25 @@ export default function App() {
                   autoFocus
                 />
               </label>
+            )}
+            {cellSel && cellSel.id === selectedTable.id && (
+              <button
+                className={
+                  (selectedTable.struck ?? []).includes(`${cellSel.row}:${cellSel.col}`)
+                    ? 'active'
+                    : ''
+                }
+                onClick={() =>
+                  dispatch({
+                    type: 'TOGGLE_STRIKE',
+                    id: selectedTable.id,
+                    row: cellSel.row,
+                    col: cellSel.col,
+                  })
+                }
+              >
+                Strikethrough cell
+              </button>
             )}
             <span className="group-title">
               {selectedTable.checkCol != null ? 'Rows / variables' : 'Rows / Columns'}

@@ -49,6 +49,7 @@ export type Action =
   | { type: 'TABLE_COLS'; id: string; delta: number }
   | { type: 'TABLE_WIDTH'; id: string; delta: number }
   | { type: 'QM_VARS'; id: string; delta: number }
+  | { type: 'TOGGLE_STRIKE'; id: string; row: number; col: number }
   | { type: 'TOGGLE_TABLE_HEADER'; id: string }
   | { type: 'TOGGLE_TABLE_MATH'; id: string }
   | { type: 'TOGGLE_TABLE_FORM'; id: string }
@@ -371,6 +372,21 @@ function docReducer(doc: Doc, a: Action): Doc {
           const bits = Array.from({ length: next }, (_, i) => `x_${next - i}`)
           cells[0] = ['Dez.', ...bits, '', 'Gruppe']
           return { ...t, cols: next + 3, cells, checkCol: next + 1 }
+        }),
+      }
+    case 'TOGGLE_STRIKE':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) => {
+          if (t.id !== a.id) return t
+          const key = `${a.row}:${a.col}`
+          const struck = t.struck ?? []
+          return {
+            ...t,
+            struck: struck.includes(key)
+              ? struck.filter((k) => k !== key)
+              : [...struck, key],
+          }
         }),
       }
     case 'TABLE_WIDTH':

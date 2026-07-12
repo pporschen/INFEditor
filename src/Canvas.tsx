@@ -771,6 +771,25 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           const ch = GRID
           const px = tb.x * GRID
           const py = tb.y * GRID
+          // per-column widths: uniform cw, except the first column of a QM
+          // combination table (Dez.) or a PI chart (the prime-implicant terms)
+          // grows to fit its content (e.g. "0,1,8,9" or "-01-")
+          const growCol0 = tb.checkCol != null || tb.pi
+          const colW = Array.from({ length: tb.cols }, (_, c) => {
+            if (!growCol0 || c !== 0) return cw
+            let maxChars = 4
+            for (let r = 0; r < tb.rows; r++)
+              maxChars = Math.max(maxChars, (tb.cells[r]?.[0] ?? '').length)
+            return Math.max(cw, maxChars * 15 * labelScale * 0.62 + 16)
+          })
+          const colX: number[] = []
+          let acc = 0
+          for (const w of colW) {
+            colX.push(acc)
+            acc += w
+          }
+          const totalW = acc
+          const struck = new Set(tb.struck ?? [])
           return (
             <g key={tb.id}>
               {tableSel && (
@@ -778,7 +797,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                   className="ui-only ring ring-sel"
                   x={px - 4}
                   y={py - 4}
-                  width={tb.cols * cw + 8}
+                  width={totalW + 8}
                   height={tb.rows * ch + 8}
                   fill="none"
                 />
@@ -786,7 +805,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
               {tb.cells.map((row, r) =>
                 row.map((cellText, c) => {
                   const isHeader = tb.header && r === 0
-                  const cx = px + c * cw
+                  const cx = px + colX[c]
                   const cy = py + r * ch
                   const sel =
                     cellSel &&
@@ -807,19 +826,36 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                       <rect
                         x={cx}
                         y={cy}
-                        width={cw}
+                        width={colW[c]}
                         height={ch}
                         className={`table-cell${isHeader ? ' table-header' : ''}${
                           sel || loopSel ? ' selected' : ''
                         }`}
                       />
                       <text
-                        x={cx + cw / 2}
+                        x={cx + colW[c] / 2}
                         y={cy + ch / 2}
                         className={`table-text${isHeader ? ' table-header-text' : ''}`}
                       >
-                        {renderRich(cellText)}
+                        {tb.pi && cellText === 'Ⓧ' ? 'X' : renderRich(cellText)}
                       </text>
+                      {tb.pi && cellText === 'Ⓧ' && (
+                        <circle
+                          cx={cx + colW[c] / 2}
+                          cy={cy + ch / 2}
+                          r={Math.min(colW[c], ch) * 0.34}
+                          className="pi-circle"
+                        />
+                      )}
+                      {struck.has(`${r}:${c}`) && (
+                        <line
+                          x1={cx + 4}
+                          y1={cy + ch / 2}
+                          x2={cx + colW[c] - 4}
+                          y2={cy + ch / 2}
+                          className="cell-strike"
+                        />
+                      )}
                     </g>
                   )
                 }),
@@ -840,9 +876,37 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                       key={`grp-${r}`}
                       x1={px}
                       y1={ly}
-                      x2={px + tb.cols * cw}
+                      x2={px + totalW}
                       y2={ly}
                       className="qm-group-sep"
+                    />
+                  )
+                })}
+
+              {/* PI chart: join each prime implicant's X marks with a line that
+                  spans from its first covered minterm to its last */}
+              {tb.pi &&
+                tb.cells.map((row, r) => {
+                  if (r === 0) return null
+                  let lo = -1
+                  let hi = -1
+                  for (let c = 1; c < tb.cols; c++) {
+                    const v = row[c] ?? ''
+                    if (v === 'X' || v === 'Ⓧ') {
+                      if (lo < 0) lo = c
+                      hi = c
+                    }
+                  }
+                  if (lo < 0 || hi <= lo) return null
+                  const y = py + r * ch + ch / 2
+                  return (
+                    <line
+                      key={`pi-${r}`}
+                      x1={px + colX[lo] + colW[lo] / 2}
+                      y1={y}
+                      x2={px + colX[hi] + colW[hi] / 2}
+                      y2={y}
+                      className="pi-cover-line"
                     />
                   )
                 })}

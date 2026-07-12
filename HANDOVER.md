@@ -87,8 +87,14 @@ Live: **https://pporschen.github.io/INFEditor/**
   and **Quine-McCluskey worksheets** `qmc` (combination table, German
   row-per-term layout: `Dez. | x_n…x_1 | ✓ | Gruppe`, starts at 4 vars; the
   inspector shows Var +/- (`QM_VARS`) to add/remove bit columns and relabel;
-  `checkCol` makes the ✓ column click-toggle empty/✓) and `qmp` (prime-implicant
-  chart: `PI / m_i` corner, blank PI rows × minterm cols).
+  `checkCol` makes the ✓ column click-toggle empty/✓; Enter at the last row
+  appends a row) and `qmp` (prime-implicant coverage chart, `pi:true`: starts
+  2×2, Enter adds a row and Tab adds a column; decimals across the top, PI terms
+  down the left; coverage cells cycle empty→`X`→`Ⓧ` (circled = essential, drawn
+  via `.pi-circle`); each row's marks are joined by a `.pi-cover-line` spanning
+  first→last covered minterm). First column of `qmc`/`qmp` auto-grows to its
+  content (per-column widths in Canvas). Any cell can be struck through
+  (`struck: ["r:c"]` + `.cell-strike`) via the inspector's Strikethrough toggle.
   QM worksheets are **empty scaffolds only** — per the never-solve rule the tool
   draws structure and the student does all grouping/combining/selection by hand.
 - **DiagDerivation** `{id, x, y, exprW, steps: {rel, expr, reason}[]}` — boolean-algebra

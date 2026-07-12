@@ -101,6 +101,9 @@ export interface DiagTable {
   kv?: number // 3 or 4: KV map variable count (for the DNF/KNF form switch)
   cellToggle?: boolean // clicking a value cell toggles 0/1 (KV maps)
   checkCol?: number // body cells in this column toggle empty/✓ on click (QM ✓)
+  pi?: boolean // prime-implicant chart: coverage cells toggle empty/X, joined
+  // by a per-row line spanning the covered minterms
+  struck?: string[] // "row:col" keys of cells drawn with a strikethrough
   form?: 'dnf' | 'knf' // KV map normal form (header labels + cell polarity)
 }
 
