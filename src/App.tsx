@@ -76,34 +76,29 @@ const REL_TYPES: { rel: RelType; label: string }[] = [
   { rel: 'composition', label: '◆  Composition (whole→part)' },
 ]
 
+// Coerce parsed JSON into a valid Doc, tolerating saves from before a
+// collection existed. Shared by autosave restore and file open.
+function normalizeDoc(d: unknown): Doc {
+  const o = (d ?? {}) as Partial<Doc>
+  return {
+    nodes: o.nodes ?? [],
+    edges: o.edges ?? [],
+    lines: o.lines ?? [],
+    texts: o.texts ?? [],
+    tables: o.tables ?? [],
+    derivations: o.derivations ?? [],
+    pages: o.pages ?? 1,
+  }
+}
+
 function loadInitial(): Doc {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const d = JSON.parse(raw)
-      // tolerate saves from before a collection existed
-      return {
-        nodes: d.nodes ?? [],
-        edges: d.edges ?? [],
-        lines: d.lines ?? [],
-        texts: d.texts ?? [],
-        tables: d.tables ?? [],
-        derivations: d.derivations ?? [],
-        pages: d.pages ?? 1,
-      }
-    }
+    if (raw) return normalizeDoc(JSON.parse(raw))
   } catch {
     /* ignore corrupt autosave */
   }
-  return {
-    nodes: [],
-    edges: [],
-    lines: [],
-    texts: [],
-    tables: [],
-    derivations: [],
-    pages: 1,
-  }
+  return normalizeDoc(null)
 }
 
 type TablePreset = 'blank' | 't2' | 't3' | 't4' | 'kv3' | 'kv4'
@@ -178,6 +173,7 @@ export default function App() {
     col: number
   } | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const labelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const attachLabel = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
     labelInputRef.current = el
@@ -323,6 +319,33 @@ export default function App() {
 
   function resetView() {
     setView({ x: -GRID, y: -GRID, w: PAGE_W + 2 * GRID })
+  }
+
+  // Save the whole document to a .json file the user can reopen later to keep
+  // editing (distinct from PNG/LaTeX export, which is final output).
+  function saveFile() {
+    const blob = new Blob([JSON.stringify(doc)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'diagram.infedit.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Open a previously saved .json file and replace the document with it.
+  function handleLoadFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-opening the same file later
+    if (!file) return
+    file
+      .text()
+      .then((txt) => {
+        dispatch({ type: 'LOAD', doc: normalizeDoc(JSON.parse(txt)) })
+        setSelection(null)
+        endMultiSelect()
+      })
+      .catch(() => alert('Could not open that file — it is not a valid saved diagram.'))
   }
 
   function handleBgClick(gx: number, gy: number) {
@@ -1206,46 +1229,68 @@ export default function App() {
         </div>
 
         <div className="group">
-          <span className="group-title">Label size</span>
-          <div className="curve-row">
+          <span className="group-title">Label size · A4 pages ({doc.pages})</span>
+          <div className="btn-grid">
             <button
               onClick={() => setLabelScale((s) => Math.max(0.6, s - 0.2))}
               title="Smaller labels"
             >
-              A−
+              A− label
             </button>
             <button
               onClick={() => setLabelScale((s) => Math.min(4, s + 0.2))}
               title="Larger labels"
             >
-              A＋
-            </button>
-          </div>
-        </div>
-
-        <div className="group">
-          <span className="group-title">A4 pages: {doc.pages}</span>
-          <div className="btn-grid">
-            <button onClick={() => dispatch({ type: 'SET_PAGES', count: doc.pages + 1 })}>
-              Add page
+              A＋ label
             </button>
             <button
               disabled={doc.pages <= 1}
               onClick={() => dispatch({ type: 'SET_PAGES', count: doc.pages - 1 })}
+              title="Remove a page"
             >
-              Remove
+              − page
+            </button>
+            <button
+              onClick={() => dispatch({ type: 'SET_PAGES', count: doc.pages + 1 })}
+              title="Add a page"
+            >
+              ＋ page
             </button>
           </div>
         </div>
 
         <div className="group">
-          <span className="group-title">Export</span>
-          <button onClick={() => svgRef.current && printA4(svgRef.current, doc.pages)}>
-            Print A4 → PDF
-          </button>
-          <button onClick={() => svgRef.current && exportPng(svgRef.current)}>
-            PNG (all content)
-          </button>
+          <span className="group-title">File · export</span>
+          <div className="btn-grid">
+            <button onClick={saveFile} title="Save the editable diagram to a .json file">
+              Save
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="Open a saved .json diagram"
+            >
+              Open…
+            </button>
+            <button
+              onClick={() => svgRef.current && printA4(svgRef.current, doc.pages)}
+              title="Print all pages to A4 PDF"
+            >
+              Print PDF
+            </button>
+            <button
+              onClick={() => svgRef.current && exportPng(svgRef.current)}
+              title="Export all content as a PNG image"
+            >
+              PNG
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleLoadFile}
+            style={{ display: 'none' }}
+          />
         </div>
 
         <div className="hint">

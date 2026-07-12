@@ -157,6 +157,11 @@ Modes (keyboard): Select `s`, Node `p`, Connect `c`, Line `l`, Text `t`, Table
   `@page { size: A4 }`. Label scale is forwarded onto `.print-root`.
 - **Copy LaTeX**: tables → `tabular` (with `$…$` if Math toggle on); derivations
   → `align*`.
+- **Save/Open** (File group): "Save to file" downloads the whole `Doc` as
+  `diagram.infedit.json`; "Open file…" reads one back and dispatches `LOAD`.
+  Both go through `normalizeDoc` (shared with the localStorage autosave restore)
+  so older/partial saves still load. This is project persistence — distinct from
+  the light-baked PNG/PDF/LaTeX **export** (final output).
 
 ## Open threads / candidate next steps
 
