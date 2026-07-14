@@ -104,6 +104,10 @@ export interface DiagTable {
   pi?: boolean // prime-implicant chart: coverage cells toggle empty/X, joined
   // by a per-row line spanning the covered minterms
   struck?: string[] // "row:col" keys of cells drawn with a strikethrough
+  boldCols?: number[] // columns with a bold separator drawn on their right edge
+  boldRows?: number[] // rows with a bold separator drawn on their bottom edge
+  hlCols?: number[] // columns tinted for visibility
+  hlRows?: number[] // rows tinted for visibility
   form?: 'dnf' | 'knf' // KV map normal form (header labels + cell polarity)
 }
 

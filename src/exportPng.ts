@@ -62,6 +62,8 @@ export function applyLightStyles(root: Element, ls: number) {
   setStyle(root, '.pi-cover-line', { stroke: LIGHT.stroke, 'stroke-width': '2' })
   setStyle(root, '.pi-circle', { fill: 'none', stroke: LIGHT.stroke, 'stroke-width': '2' })
   setStyle(root, '.cell-strike', { stroke: LIGHT.stroke, 'stroke-width': '2' })
+  setStyle(root, '.table-bold-sep', { stroke: LIGHT.stroke, 'stroke-width': '3' })
+  setStyle(root, '.table-highlight', { fill: '#facc15', opacity: '0.3' })
   setStyle(root, '.table-cell.table-header', { fill: '#f0f2f7' })
   setStyle(root, '.table-text', {
     fill: LIGHT.ink,

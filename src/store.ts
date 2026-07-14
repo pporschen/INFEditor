@@ -50,6 +50,9 @@ export type Action =
   | { type: 'TABLE_WIDTH'; id: string; delta: number }
   | { type: 'QM_VARS'; id: string; delta: number }
   | { type: 'TOGGLE_STRIKE'; id: string; row: number; col: number }
+  | { type: 'MOVE_ROW'; id: string; row: number; dir: number }
+  | { type: 'TOGGLE_BOLD_SEP'; id: string; axis: 'col' | 'row'; index: number }
+  | { type: 'TOGGLE_HIGHLIGHT'; id: string; axis: 'col' | 'row'; index: number }
   | { type: 'TOGGLE_TABLE_HEADER'; id: string }
   | { type: 'TOGGLE_TABLE_MATH'; id: string }
   | { type: 'TOGGLE_TABLE_FORM'; id: string }
@@ -372,6 +375,60 @@ function docReducer(doc: Doc, a: Action): Doc {
           const bits = Array.from({ length: next }, (_, i) => `x_${next - i}`)
           cells[0] = ['Dez.', ...bits, '', 'Gruppe']
           return { ...t, cols: next + 3, cells, checkCol: next + 1 }
+        }),
+      }
+    case 'MOVE_ROW':
+      // swap a body row with its neighbour; the header row (0) stays put and
+      // strikethroughs travel with their row.
+      return {
+        ...doc,
+        tables: doc.tables.map((t) => {
+          if (t.id !== a.id) return t
+          const r = a.row
+          const r2 = r + a.dir
+          if (r < 1 || r2 < 1 || r >= t.rows || r2 >= t.rows) return t
+          const cells = t.cells.map((row) => row.slice())
+          ;[cells[r], cells[r2]] = [cells[r2], cells[r]]
+          const struck = (t.struck ?? []).map((k) => {
+            const [kr, kc] = k.split(':')
+            const n = Number(kr)
+            if (n === r) return `${r2}:${kc}`
+            if (n === r2) return `${r}:${kc}`
+            return k
+          })
+          return { ...t, cells, struck }
+        }),
+      }
+    case 'TOGGLE_BOLD_SEP':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) => {
+          if (t.id !== a.id) return t
+          const toggle = (arr?: number[]) => {
+            const cur = arr ?? []
+            return cur.includes(a.index)
+              ? cur.filter((n) => n !== a.index)
+              : [...cur, a.index]
+          }
+          return a.axis === 'col'
+            ? { ...t, boldCols: toggle(t.boldCols) }
+            : { ...t, boldRows: toggle(t.boldRows) }
+        }),
+      }
+    case 'TOGGLE_HIGHLIGHT':
+      return {
+        ...doc,
+        tables: doc.tables.map((t) => {
+          if (t.id !== a.id) return t
+          const toggle = (arr?: number[]) => {
+            const cur = arr ?? []
+            return cur.includes(a.index)
+              ? cur.filter((n) => n !== a.index)
+              : [...cur, a.index]
+          }
+          return a.axis === 'col'
+            ? { ...t, hlCols: toggle(t.hlCols) }
+            : { ...t, hlRows: toggle(t.hlRows) }
         }),
       }
     case 'TOGGLE_STRIKE':

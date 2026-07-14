@@ -20,6 +20,7 @@ import { GATES } from './gates'
 
 const LOOP_BASE = 30 // base bulge distance of a self-loop, in px
 const LOOP_W = 20 // half-width of the self-loop
+const CELL_PAD = 12 // constant horizontal padding (px) each side of cell text
 
 
 // Render a small LaTeX subset used for logic/boolean formatting:
@@ -296,6 +297,13 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     for (const n of doc.nodes) m.set(n.id, n)
     return m
   }, [doc.nodes])
+
+  // offscreen 2D context to measure actual text width, so an auto-grown column
+  // keeps the same padding around its text as any other cell
+  const measureCtx = useMemo(
+    () => document.createElement('canvas').getContext('2d'),
+    [],
+  )
 
   // While placing shapes/dots or drawing wires, let every click fall through to
   // the grid — otherwise existing nodes/edges/lines would swallow the click and
@@ -771,16 +779,24 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           const ch = GRID
           const px = tb.x * GRID
           const py = tb.y * GRID
-          // per-column widths: uniform cw, except the first column of a QM
-          // combination table (Dez.) or a PI chart (the prime-implicant terms)
-          // grows to fit its content (e.g. "0,1,8,9" or "-01-")
-          const growCol0 = tb.checkCol != null || tb.pi
+          // per-column widths: every column grows to fit its widest cell (min
+          // cw), so e.g. the QM Dez. list "0,1,8,9" or a "Gruppe" header isn't
+          // clipped. KV maps stay uniform — their group loops are drawn
+          // assuming equal columns.
+          const uniform = tb.kv != null
+          const fontPx = 15 * labelScale
+          // match the actual rendered font so padding doesn't drift with length
+          if (measureCtx)
+            measureCtx.font = `${fontPx}px system-ui, -apple-system, 'Segoe UI', sans-serif`
+          const textW = (s: string) =>
+            measureCtx ? measureCtx.measureText(s).width : s.length * fontPx * 0.6
           const colW = Array.from({ length: tb.cols }, (_, c) => {
-            if (!growCol0 || c !== 0) return cw
-            let maxChars = 4
+            if (uniform) return cw
+            let maxW = 0
             for (let r = 0; r < tb.rows; r++)
-              maxChars = Math.max(maxChars, (tb.cells[r]?.[0] ?? '').length)
-            return Math.max(cw, maxChars * 15 * labelScale * 0.62 + 16)
+              maxW = Math.max(maxW, textW(tb.cells[r]?.[c] ?? ''))
+            // measured text + the same constant padding on both sides
+            return Math.max(cw, maxW + CELL_PAD * 2)
           })
           const colX: number[] = []
           let acc = 0
@@ -861,6 +877,32 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                 }),
               )}
 
+              {/* row/column highlights — translucent tint over the cells */}
+              {(tb.hlCols ?? [])
+                .filter((c) => c < tb.cols)
+                .map((c) => (
+                  <rect
+                    key={`hlc-${c}`}
+                    x={px + colX[c]}
+                    y={py}
+                    width={colW[c]}
+                    height={tb.rows * ch}
+                    className="table-highlight"
+                  />
+                ))}
+              {(tb.hlRows ?? [])
+                .filter((r) => r < tb.rows)
+                .map((r) => (
+                  <rect
+                    key={`hlr-${r}`}
+                    x={px}
+                    y={py + r * ch}
+                    width={totalW}
+                    height={ch}
+                    className="table-highlight"
+                  />
+                ))}
+
               {/* QM combination table: bold divider wherever the Gruppe column
                   (rightmost) value changes between adjacent rows — a formatting
                   cue driven purely by what the user typed */}
@@ -907,6 +949,38 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
                       x2={px + colX[hi] + colW[hi] / 2}
                       y2={y}
                       className="pi-cover-line"
+                    />
+                  )
+                })}
+
+              {/* user-chosen bold separators: right edge of a column / bottom of a row */}
+              {(tb.boldCols ?? [])
+                .filter((c) => c < tb.cols)
+                .map((c) => {
+                  const x = px + colX[c] + colW[c]
+                  return (
+                    <line
+                      key={`bc-${c}`}
+                      x1={x}
+                      y1={py}
+                      x2={x}
+                      y2={py + tb.rows * ch}
+                      className="table-bold-sep"
+                    />
+                  )
+                })}
+              {(tb.boldRows ?? [])
+                .filter((r) => r < tb.rows)
+                .map((r) => {
+                  const y = py + (r + 1) * ch
+                  return (
+                    <line
+                      key={`br-${r}`}
+                      x1={px}
+                      y1={y}
+                      x2={px + totalW}
+                      y2={y}
+                      className="table-bold-sep"
                     />
                   )
                 })}

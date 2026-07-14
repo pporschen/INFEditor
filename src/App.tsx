@@ -346,6 +346,31 @@ export default function App() {
     setView({ x: -GRID, y: -GRID, w: PAGE_W + 2 * GRID })
   }
 
+  // short type label for the quick-jump table list
+  function tableLabel(tb: DiagTable): string {
+    if (tb.checkCol != null) return 'QM comb.'
+    if (tb.pi) return 'PI chart'
+    if (tb.kv) return `KV ${tb.kv}`
+    if (tb.inputCols != null) return 'Truth'
+    return 'Table'
+  }
+
+  // pan the view to center a table and select it — one dwell to jump there,
+  // keeping the current zoom level (no re-fit)
+  function focusTable(tb: DiagTable) {
+    const bw = tb.cols * tb.cw * GRID
+    const bh = tb.rows * GRID
+    setView((v) => ({
+      x: tb.x * GRID + bw / 2 - v.w / 2,
+      y: tb.y * GRID + bh / 2 - (v.w * aspect) / 2,
+      w: v.w,
+    }))
+    setMode('select')
+    setSelection({ kind: 'table', id: tb.id })
+    setCellSel(null)
+    returnModeRef.current = null
+  }
+
   // Save the whole document to a .json file the user can reopen later to keep
   // editing (distinct from PNG/LaTeX export, which is final output).
   function saveFile() {
@@ -577,6 +602,14 @@ export default function App() {
       return
     }
     if (mode !== 'select') return
+    // First click on a not-yet-selected table only selects it — no in-cell
+    // action fires until the table is the active selection.
+    if (!loopMode && (selection?.kind !== 'table' || selection.id !== id)) {
+      returnModeRef.current = null
+      setSelection({ kind: 'table', id })
+      setCellSel(null)
+      return
+    }
     // KV value cell (not a header): a click flips 0/1. The cell is still
     // selected so you can type something else (e.g. "-") in the field.
     const tbl = doc.tables.find((t) => t.id === id)
@@ -754,6 +787,15 @@ export default function App() {
   }
 
   // nudge the selected node (used for junction dots) by a fraction of a cell
+  // move the selected table cell's row up (-1) or down (+1); header row stays
+  function moveRow(dir: number) {
+    if (!cellSel || !selectedTable) return
+    const r2 = cellSel.row + dir
+    if (cellSel.row < 1 || r2 < 1 || r2 >= selectedTable.rows) return
+    dispatch({ type: 'MOVE_ROW', id: selectedTable.id, row: cellSel.row, dir })
+    setCellSel({ ...cellSel, row: r2 })
+  }
+
   function nudgeNode(dx: number, dy: number) {
     if (selection?.kind !== 'node') return
     const n = doc.nodes.find((x) => x.id === selection.id)
@@ -976,6 +1018,9 @@ export default function App() {
   function handleCellKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!cellSel || !selectedTable) return
     const { rows, cols } = selectedTable
+    // free-form tables (blank + QM) grow at the edge; fixed truth/KV templates
+    // keep their wrap-around navigation.
+    const growable = selectedTable.kv == null && selectedTable.inputCols == null
     const el = e.currentTarget
     let { row, col } = cellSel
     switch (e.key) {
@@ -992,8 +1037,8 @@ export default function App() {
             col = cols - 1
             row = (row - 1 + rows) % rows
           }
-        } else if (selectedTable.pi && col === cols - 1) {
-          // PI chart: Tab at the last column appends a new column and steps in
+        } else if (growable && col === cols - 1) {
+          // at the last column: append a new column and step into it
           dispatch({ type: 'TABLE_COLS', id: cellSel.id, delta: 1 })
           col = col + 1
         } else {
@@ -1006,10 +1051,10 @@ export default function App() {
         break
       case 'Enter':
         e.preventDefault()
-        // QM tables grow on Enter: at the last row, append one and step into it.
-        if ((selectedTable.checkCol != null || selectedTable.pi) && row === rows - 1) {
+        // at the last row of a free-form table: append a row and step into it
+        if (growable && row === rows - 1) {
           dispatch({ type: 'TABLE_ROWS', id: cellSel.id, delta: 1 })
-          row = row + 1 // step into the newly appended row
+          row = row + 1
         } else {
           row = Math.min(rows - 1, row + 1)
         }
@@ -1278,6 +1323,23 @@ export default function App() {
             </button>
           </div>
         </div>
+
+        {doc.tables.length > 0 && (
+          <div className="group">
+            <span className="group-title">Tables — jump to</span>
+            {doc.tables.map((tb, i) => (
+              <button
+                key={tb.id}
+                className={
+                  selection?.kind === 'table' && selection.id === tb.id ? 'active' : ''
+                }
+                onClick={() => focusTable(tb)}
+              >
+                {i + 1} · {tableLabel(tb)}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="group">
           <span className="group-title">View (pan / zoom)</span>
@@ -1814,6 +1876,95 @@ export default function App() {
                 Strikethrough cell
               </button>
             )}
+            {cellSel && cellSel.id === selectedTable.id && (
+              <>
+                <span className="group-title">Bold separator</span>
+                <div className="btn-grid">
+                  <button
+                    className={
+                      (selectedTable.boldCols ?? []).includes(cellSel.col) ? 'active' : ''
+                    }
+                    onClick={() =>
+                      dispatch({
+                        type: 'TOGGLE_BOLD_SEP',
+                        id: selectedTable.id,
+                        axis: 'col',
+                        index: cellSel.col,
+                      })
+                    }
+                  >
+                    Right edge
+                  </button>
+                  <button
+                    className={
+                      (selectedTable.boldRows ?? []).includes(cellSel.row) ? 'active' : ''
+                    }
+                    onClick={() =>
+                      dispatch({
+                        type: 'TOGGLE_BOLD_SEP',
+                        id: selectedTable.id,
+                        axis: 'row',
+                        index: cellSel.row,
+                      })
+                    }
+                  >
+                    Bottom edge
+                  </button>
+                </div>
+                <span className="group-title">Highlight</span>
+                <div className="btn-grid">
+                  <button
+                    className={
+                      (selectedTable.hlCols ?? []).includes(cellSel.col) ? 'active' : ''
+                    }
+                    onClick={() =>
+                      dispatch({
+                        type: 'TOGGLE_HIGHLIGHT',
+                        id: selectedTable.id,
+                        axis: 'col',
+                        index: cellSel.col,
+                      })
+                    }
+                  >
+                    Column
+                  </button>
+                  <button
+                    className={
+                      (selectedTable.hlRows ?? []).includes(cellSel.row) ? 'active' : ''
+                    }
+                    onClick={() =>
+                      dispatch({
+                        type: 'TOGGLE_HIGHLIGHT',
+                        id: selectedTable.id,
+                        axis: 'row',
+                        index: cellSel.row,
+                      })
+                    }
+                  >
+                    Row
+                  </button>
+                </div>
+              </>
+            )}
+            {cellSel &&
+              cellSel.id === selectedTable.id &&
+              (selectedTable.checkCol != null || selectedTable.pi) &&
+              cellSel.row >= 1 && (
+                <>
+                  <span className="group-title">Move row</span>
+                  <div className="curve-row">
+                    <button onClick={() => moveRow(-1)} disabled={cellSel.row <= 1}>
+                      ↑
+                    </button>
+                    <button
+                      onClick={() => moveRow(1)}
+                      disabled={cellSel.row >= selectedTable.rows - 1}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                </>
+              )}
             <span className="group-title">
               {selectedTable.checkCol != null ? 'Rows / variables' : 'Rows / Columns'}
             </span>

@@ -92,9 +92,11 @@ Live: **https://pporschen.github.io/INFEditor/**
   2×2, Enter adds a row and Tab adds a column; decimals across the top, PI terms
   down the left; coverage cells cycle empty→`X`→`Ⓧ` (circled = essential, drawn
   via `.pi-circle`); each row's marks are joined by a `.pi-cover-line` spanning
-  first→last covered minterm). First column of `qmc`/`qmp` auto-grows to its
-  content (per-column widths in Canvas). Any cell can be struck through
-  (`struck: ["r:c"]` + `.cell-strike`) via the inspector's Strikethrough toggle.
+  first→last covered minterm). Every column auto-grows to fit its widest cell
+  (per-column widths in Canvas; KV maps stay uniform for their loops). Row order
+  can be changed with Move row ↑/↓ (`MOVE_ROW`; header fixed). Any cell can be
+  struck through (`struck: ["r:c"]` + `.cell-strike`) via the inspector toggle.
+  A **Tables — jump to** toolbar list pans/selects any table (`focusTable`).
   QM worksheets are **empty scaffolds only** — per the never-solve rule the tool
   draws structure and the student does all grouping/combining/selection by hand.
 - **DiagDerivation** `{id, x, y, exprW, steps: {rel, expr, reason}[]}` — boolean-algebra
