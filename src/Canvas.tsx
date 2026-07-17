@@ -41,6 +41,21 @@ const OP: Record<string, string> = {
   implies: '⇒',
   Leftrightarrow: '⇔',
   iff: '⇔',
+  ss: 'ß',
+}
+
+// LaTeX diaeresis accent (\"a, \"{o}, …) → the precomposed umlaut for display,
+// while the source stays pure LaTeX for export. Falls back to a combining mark.
+const UMLAUT: Record<string, string> = {
+  a: 'ä',
+  o: 'ö',
+  u: 'ü',
+  A: 'Ä',
+  O: 'Ö',
+  U: 'Ü',
+  e: 'ë',
+  i: 'ï',
+  y: 'ÿ',
 }
 
 const OVERBAR = '̅' // combining overline — draws a bar over the preceding glyph
@@ -62,6 +77,8 @@ function opsToUnicode(s: string): string {
     .replace(/\\vee/g, '∨')
     .replace(/\\land/g, '∧')
     .replace(/\\wedge/g, '∧')
+    .replace(/\\ss/g, 'ß')
+    .replace(/\\"\{?([a-zA-Z])\}?/g, (_, c) => UMLAUT[c] ?? c + '̈')
 }
 
 // Render a negated group as combining overlines — reliable in every browser
@@ -110,8 +127,15 @@ function renderRich(s: string): ReactNode {
   while (i < s.length) {
     const ch = s[i]
     if (ch === '\\') {
+      // LaTeX diaeresis accent: \"a or \"{a} → umlaut glyph for display
+      if (s[i + 1] === '"') {
+        i += 2
+        const arg = readArg()
+        buf += UMLAUT[arg] ?? arg + '̈'
+        continue
+      }
       const m =
-        /^\\(overline|bar|cdot|oplus|lnot|neg|lor|vee|land|wedge|left|right|Rightarrow|implies|Leftrightarrow|iff)/.exec(
+        /^\\(overline|bar|cdot|oplus|lnot|neg|lor|vee|land|wedge|left|right|Rightarrow|implies|Leftrightarrow|iff|ss)/.exec(
           s.slice(i),
         )
       if (m) {
@@ -256,6 +280,7 @@ interface Props {
   onEdgeClick: (id: string) => void
   onLineClick: (id: string) => void
   onTextClick: (id: string) => void
+  onTextCaret: (id: string, offset: number) => void
   cellSel: { id: string; row: number; col: number } | null
   loopFirst: { id: string; row: number; col: number } | null
   onCellClick: (id: string, row: number, col: number) => void
@@ -283,6 +308,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
     onEdgeClick,
     onLineClick,
     onTextClick,
+    onTextCaret,
     cellSel,
     loopFirst,
     onCellClick,
@@ -697,7 +723,12 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
               className="node"
             >
               {n.shape === 'dot' ? (
-                <circle cx={c.x} cy={c.y} r={hw} className="dot-fill" />
+                <circle
+                  cx={c.x}
+                  cy={c.y}
+                  r={hw}
+                  className={n.hollow ? 'dot-outline' : 'dot-fill'}
+                />
               ) : n.shape === 'circle' ? (
                 <>
                   <ellipse
@@ -1155,26 +1186,98 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
           const py = t.y * GRID
           if (t.kind === 'text') {
             // multi-line plain text (real newlines); left/centre aligned
-            const lines = t.text ? t.text.split('\n') : ['Text…']
+            // break on real newlines and on double-backslash (like labels);
+            // lineStart[i] = source offset where rendered line i begins
+            const src = t.text
+            const lines: string[] = []
+            const lineStart: number[] = []
+            if (!src) {
+              lines.push('Text…')
+              lineStart.push(0)
+            } else {
+              let start = 0
+              let k = 0
+              while (k < src.length) {
+                const dbl = src.charCodeAt(k) === 92 && src.charCodeAt(k + 1) === 92
+                const nl = src.charCodeAt(k) === 10
+                if (dbl || nl) {
+                  lines.push(src.slice(start, k))
+                  lineStart.push(start)
+                  k += dbl ? 2 : 1
+                  start = k
+                } else {
+                  k++
+                }
+              }
+              lines.push(src.slice(start))
+              lineStart.push(start)
+            }
             const anchor = t.align === 'center' ? 'middle' : 'start'
+            // soft-accent editing box behind the text (like a derivation field)
+            const fontPx = 16 * (t.size ?? 1) * labelScale
+            if (measureCtx)
+              measureCtx.font = `${t.bold ? '700 ' : ''}${fontPx}px system-ui, -apple-system, 'Segoe UI', sans-serif`
+            const lineW = (s: string) =>
+              measureCtx ? measureCtx.measureText(s).width : s.length * fontPx * 0.6
+            const maxW = Math.max(1, ...lines.map((l) => lineW(l || ' ')))
+            const boxH = (lines.length - 1) * 1.35 * fontPx + fontPx * 1.2 + 12
             return (
-              <text
-                key={t.id}
-                x={px}
-                y={py}
-                onClick={() => onTextClick(t.id)}
-                textAnchor={anchor}
-                className={`text-block${selected ? ' selected' : ''}${
-                  t.text ? '' : ' placeholder'
-                }${t.bold ? ' bold' : ''}`}
+              <g key={t.id}>
+                {selected && (
+                  <rect
+                    className="ui-only text-edit-box"
+                    x={(anchor === 'middle' ? px - maxW / 2 : px) - 8}
+                    y={py - 6}
+                    width={maxW + 16}
+                    height={boxH}
+                    rx={6}
+                  />
+                )}
+                <text
+                  key={t.id}
+                  x={px}
+                  y={py}
+                  onClick={() => onTextClick(t.id)}
+                  textAnchor={anchor}
+                  className={`text-block${t.text ? '' : ' placeholder'}${
+                    t.bold ? ' bold' : ''
+                  }`}
                 style={{ fontSize: `calc(${16 * (t.size ?? 1)}px * var(--label-scale, 1))` }}
               >
                 {lines.map((ln, i) => (
-                  <tspan key={i} x={px} dy={i === 0 ? 0 : '1.35em'}>
+                  <tspan
+                    key={i}
+                    x={px}
+                    dy={i === 0 ? 0 : '1.35em'}
+                    style={{ cursor: mode === 'select' ? 'text' : undefined }}
+                    onClick={(e) => {
+                      if (mode !== 'select') {
+                        onTextClick(t.id)
+                        return
+                      }
+                      e.stopPropagation()
+                      const tsp = e.currentTarget
+                      const ctm = tsp.ownerSVGElement?.getScreenCTM()
+                      if (!ctm) {
+                        onTextCaret(t.id, 0)
+                        return
+                      }
+                      const pt = tsp.ownerSVGElement!.createSVGPoint()
+                      pt.x = e.clientX
+                      pt.y = e.clientY
+                      const localX = pt.matrixTransform(ctm.inverse()).x
+                      const w = tsp.getComputedTextLength() || 1
+                      const startX = anchor === 'middle' ? px - w / 2 : px
+                      const frac = Math.max(0, Math.min(1, (localX - startX) / w))
+                      const offset = lineStart[i] + Math.round(frac * ln.length)
+                      onTextCaret(t.id, offset)
+                    }}
+                  >
                     {ln || ' '}
                   </tspan>
                 ))}
-              </text>
+                </text>
+              </g>
             )
           }
           return (

@@ -244,6 +244,11 @@ button.active kbd {
 .dot-fill {
   fill: var(--stroke);
 }
+.dot-outline {
+  fill: var(--node-fill);
+  stroke: var(--stroke);
+  stroke-width: 2;
+}
 
 /* tables */
 .table-cell {
@@ -368,6 +373,10 @@ button.active kbd {
 }
 .text-block.selected {
   fill: var(--accent);
+}
+.text-edit-box {
+  fill: var(--accent-soft);
+  pointer-events: none;
 }
 
 /* free-standing text label */

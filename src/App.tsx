@@ -106,6 +106,55 @@ type TablePreset = 'blank' | 't2' | 't3' | 't4' | 'kv3' | 'kv4' | 'qmc' | 'qmp'
 // Build a fresh table from a preset. Truth tables get n input columns + one
 // output column and 2^n rows; KV maps get the Gray-code grid + variable-group
 // labels. All VALUE cells start empty — the editor never fills in content.
+// Tidy one imported LaTeX cell: collapse whitespace, unwrap a single {…}
+// group, and unescape the common LaTeX character escapes.
+function cleanCell(s: string): string {
+  let t = s.replace(/\s+/g, ' ').trim()
+  if (t.startsWith('{') && t.endsWith('}')) t = t.slice(1, -1).trim()
+  return t.replace(/\\([&%$#_{}])/g, '$1')
+}
+
+// Best-effort import of a LaTeX `tabular` into a table. Handles \hline,
+// \multicolumn (expanded to N columns), and \multirow (content in the top
+// cell). Returns the cells + geometry, or null if no tabular is found.
+function parseLatexTable(
+  src: string,
+): Pick<DiagTable, 'cols' | 'rows' | 'cw' | 'header' | 'cells'> | null {
+  const m = /\\begin\{tabular\}\s*(?:\[[^\]]*\])?\s*\{[^}]*\}([\s\S]*?)\\end\{tabular\}/.exec(src)
+  if (!m) return null
+  const body = m[1].replace(/\\hline/g, '').replace(/\\(?:top|mid|bottom)rule/g, '')
+  const rowStrs = body
+    .split(/\\\\(?:\s*\[[^\]]*\])?/)
+    .map((r) => r.trim())
+    .filter((r) => r.length > 0)
+  const rows: string[][] = []
+  for (const rs of rowStrs) {
+    const expanded: string[] = []
+    for (const raw of rs.split('&')) {
+      const cell = raw.trim()
+      const mc = /^\\multicolumn\{(\d+)\}\{[^}]*\}\{([\s\S]*)\}$/.exec(cell)
+      const mr = /^\\multirow\{(\d+)\}\{[^}]*\}\{([\s\S]*)\}$/.exec(cell)
+      if (mc) {
+        expanded.push(cleanCell(mc[2]))
+        for (let k = 1; k < parseInt(mc[1], 10); k++) expanded.push('')
+      } else if (mr) {
+        expanded.push(cleanCell(mr[2]))
+      } else {
+        expanded.push(cleanCell(cell))
+      }
+    }
+    rows.push(expanded)
+  }
+  if (rows.length === 0) return null
+  const cols = Math.max(...rows.map((r) => r.length))
+  const cells = rows.map((r) => {
+    const rr = r.slice()
+    while (rr.length < cols) rr.push('')
+    return rr
+  })
+  return { cols, rows: cells.length, cw: 1, header: true, cells }
+}
+
 function makeTable(id: string, x: number, y: number, preset: TablePreset): DiagTable {
   const base = { id, x, y, cw: 3, header: true }
   if (preset === 'kv3' || preset === 'kv4') {
@@ -168,7 +217,7 @@ export default function App() {
   const { doc, canUndo, dispatch } = useEditor(loadInitial)
   const [mode, setMode] = useState<Mode>('node')
   const [shape, setShape] = useState<Shape>('circle')
-  const [textKind, setTextKind] = useState<'label' | 'text'>('label')
+  const [textKind, setTextKind] = useState<'label' | 'text'>('text')
   const [selection, setSelection] = useState<Selection>(null)
   // group multi-select: while `multiMode` is on, each dwell toggles a part into
   // `multi` (refs `{kind,id}`) so several items can be nudged together.
@@ -325,6 +374,8 @@ export default function App() {
     setSelection(null)
     setLoopMode(false)
     setLoopFirst(null)
+    setMultiMode(false) // any tool click ends group multi-select
+    setMulti([])
   }, [])
 
   // pan by a fraction of the visible area (so it scales with zoom)
@@ -369,6 +420,37 @@ export default function App() {
     setSelection({ kind: 'table', id: tb.id })
     setCellSel(null)
     returnModeRef.current = null
+  }
+
+  // Import a LaTeX tabular from the clipboard into an editable table.
+  function importLatexTable() {
+    const place = (txt: string) => {
+      const parsed = parseLatexTable(txt)
+      if (!parsed) {
+        alert('No \\begin{tabular}…\\end{tabular} found to import.')
+        return
+      }
+      const id = crypto.randomUUID()
+      dispatch({
+        type: 'ADD_TABLE',
+        table: {
+          ...parsed,
+          id,
+          x: Math.round(view.x / GRID) + 2,
+          y: Math.round(view.y / GRID) + 2,
+        },
+      })
+      setMode('select')
+      setSelection({ kind: 'table', id })
+      setCellSel(null)
+    }
+    navigator.clipboard
+      .readText()
+      .then(place)
+      .catch(() => {
+        const txt = window.prompt('Paste the LaTeX tabular here:')
+        if (txt) place(txt)
+      })
   }
 
   // Save the whole document to a .json file the user can reopen later to keep
@@ -712,6 +794,20 @@ export default function App() {
     focusLabelRef.current = true
   }
 
+  // Click inside a multi-line text block → focus its textarea with the caret at
+  // the clicked character offset (like clicking a derivation expression).
+  function handleTextCaret(id: string, offset: number) {
+    if (mode !== 'select') return
+    if (multiMode) {
+      toggleMulti('text', id)
+      return
+    }
+    returnModeRef.current = null
+    setSelection({ kind: 'text', id })
+    pendingCaretRef.current = offset
+    focusLabelRef.current = true
+  }
+
   function handleNodeClick(id: string) {
     if (multiMode) {
       toggleMulti('node', id)
@@ -864,11 +960,12 @@ export default function App() {
     setHoverCell(null)
   }
 
-  // leaving Select mode abandons an in-progress group selection
+  // group multi-select ends when leaving Select mode or when a single item
+  // gets selected some other way (e.g. the jump-to-table list)
   useEffect(() => {
-    if (mode !== 'select' && multiMode) endMultiSelect()
+    if ((mode !== 'select' || selection) && multiMode) endMultiSelect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode])
+  }, [mode, selection])
 
   // nudge a text label by a fraction of a cell (same step as wires)
   function nudgeText(dx: number, dy: number) {
@@ -1301,6 +1398,9 @@ export default function App() {
                 </button>
               ))}
             </div>
+            <button onClick={importLatexTable} title="Import a LaTeX tabular from the clipboard">
+              ⎘ Paste LaTeX table
+            </button>
           </div>
         )}
 
@@ -1491,6 +1591,7 @@ export default function App() {
           onEdgeClick={handleEdgeClick}
           onLineClick={handleLineClick}
           onTextClick={handleTextClick}
+          onTextCaret={handleTextCaret}
           cellSel={cellSel}
           loopFirst={loopFirst}
           onCellClick={handleCellClick}
@@ -1537,6 +1638,15 @@ export default function App() {
                   <span />
                 </div>
                 <p className="muted">Or dwell an empty cell to move it.</p>
+                <span className="group-title">Style</span>
+                <button
+                  className={selectedNode.hollow ? 'active' : ''}
+                  onClick={() =>
+                    dispatch({ type: 'TOGGLE_DOT_HOLLOW', id: selectedNode.id })
+                  }
+                >
+                  Outlined (off = filled)
+                </button>
               </>
             )}
             {selectedNode.shape === 'circle' && (

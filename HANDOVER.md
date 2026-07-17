@@ -74,7 +74,10 @@ Live: **https://pporschen.github.io/INFEditor/**
   fractional (¼-cell nudge/resize buttons). Arrowheads start/end/both.
 - **DiagText** `{id, x, y, text, kind?, size?, align?, bold?}` — free text. `kind`
   `'label'` = short math-markup label (renderRich, `\\` breaks); `'text'` = a
-  multi-line plain-text block (real newlines, size/align/bold options).
+  multi-line plain-text block (breaks on real newlines AND `\\`; size/align/bold;
+  default kind for the Text tool). Selecting a `'text'` block shows a soft-accent
+  editing box (`.text-edit-box`, screen-only) and clicking it drops the caret at
+  the clicked character (`onTextCaret`, via `lineStart` source offsets).
 - **DiagTable** `{id, x, y, cols, rows, cw, header, cells[][], inputCols?, math?, loops?}` —
   tables + truth-table shells. `math` wraps cells in `$…$` on export. `loops` are
   **KV/Karnaugh group markings** (`TableLoop {r1,c1,r2,c2,color,label}`): rounded

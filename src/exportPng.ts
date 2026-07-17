@@ -44,6 +44,11 @@ export function applyLightStyles(root: Element, ls: number) {
   })
   setStyle(root, '.gate-bubble', { fill: LIGHT.nodeFill, stroke: LIGHT.stroke, 'stroke-width': '2' })
   setStyle(root, '.dot-fill', { fill: LIGHT.stroke })
+  setStyle(root, '.dot-outline', {
+    fill: LIGHT.nodeFill,
+    stroke: LIGHT.stroke,
+    'stroke-width': '2',
+  })
   setStyle(root, '.free-text', {
     fill: LIGHT.ink,
     'font-size': String(16 * ls),
@@ -162,7 +167,12 @@ export function exportPng(svg: SVGSVGElement, filename = 'diagram.png') {
 
   applyLightStyles(clone, ls)
 
-  const data = new XMLSerializer().serializeToString(clone)
+  // Prepend an explicit UTF-8 XML declaration: when the serialized SVG is
+  // reloaded through an <img>, the decoder otherwise guesses the encoding and
+  // can mangle non-ASCII (umlauts → "Ã¤"). Force UTF-8.
+  const data =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    new XMLSerializer().serializeToString(clone)
   const svgBlob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' })
   const url = URL.createObjectURL(svgBlob)
 

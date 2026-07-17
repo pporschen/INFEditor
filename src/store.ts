@@ -80,6 +80,7 @@ export type Action =
   | { type: 'SET_NODE_GATE'; id: string; gate: GateType | 'none' }
   | { type: 'TOGGLE_ACCEPTING'; id: string }
   | { type: 'TOGGLE_START'; id: string }
+  | { type: 'TOGGLE_DOT_HOLLOW'; id: string }
   | { type: 'CLEAR' }
   | { type: 'LOAD'; doc: Doc }
   | { type: 'UNDO' }
@@ -258,6 +259,11 @@ function docReducer(doc: Doc, a: Action): Doc {
       return {
         ...doc,
         nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, start: !n.start } : n)),
+      }
+    case 'TOGGLE_DOT_HOLLOW':
+      return {
+        ...doc,
+        nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, hollow: !n.hollow } : n)),
       }
     case 'ADD_TEXT':
       return {
