@@ -145,6 +145,36 @@ button.active kbd {
   justify-content: center;
   padding: 16px;
   overflow: hidden;
+  position: relative;
+}
+
+.page-jump {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.page-jump-list {
+  display: flex;
+  gap: 6px;
+  max-width: min(62vw, 620px);
+  overflow-x: auto;
+  padding: 2px;
+}
+
+.page-jump button {
+  min-width: 44px;
+  justify-content: center;
+  text-align: center;
 }
 
 .canvas {
