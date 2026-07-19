@@ -455,8 +455,8 @@ function docReducer(doc: Doc, a: Action): Doc {
 				tables: doc.tables.map((t) => {
 					if (t.id !== a.id || !t.kv || !t.form) return t;
 					const form = t.form === "dnf" ? "knf" : "dnf";
-					const colHead = kvHeaderRow(form);
-					const rowHead = kvHeaderCol(t.kv, form);
+					const colHead = kvHeaderRow(form, t.kvVars);
+					const rowHead = kvHeaderCol(t.kv, form, t.kvVars);
 					const cells = t.cells.map((row, r) =>
 						row.map((cell, c) => {
 							if (r === 0 && c === 0) return ""; // corner

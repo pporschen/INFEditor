@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas } from "./Canvas";
+import { Canvas, renderLines } from "./Canvas";
 import type { View } from "./Canvas";
 import { useEditor } from "./store";
 import { exportPng } from "./exportPng";
@@ -52,6 +52,7 @@ function boolConvert(s: string, atEnd: boolean): string {
 }
 const ZOOM_MIN = W * 0.25; // most zoomed-in (smallest viewBox)
 const ZOOM_MAX = W * 8; // most zoomed-out (largest viewBox)
+const DEFAULT_VIEW_W = (PAGE_W + 2 * GRID) * Math.pow(1.25, 2); // default zoomed out by 2 steps
 
 // UML relationship picker. Glyphs mark the end where the marker sits.
 // Direction: draw from the "source" of the arrow to its head — subclass→super
@@ -92,6 +93,10 @@ function loadInitial(): Doc {
 }
 
 type TablePreset = "blank" | "kv3" | "kv4" | "qmc" | "qmp";
+
+function defaultKvVars(kv: number): string[] {
+	return Array.from({ length: kv }, (_, i) => `x_${i + 1}`);
+}
 
 // Build a fresh table from a preset. Truth tables get n input columns + one
 // output column and 2^n rows; KV maps get the Gray-code grid + variable-group
@@ -143,14 +148,22 @@ function parseLatexTable(src: string): Pick<DiagTable, "cols" | "rows" | "cw" | 
 	return { cols, rows: cells.length, cw: 1, header: true, cells };
 }
 
-function makeTable(id: string, x: number, y: number, preset: TablePreset): DiagTable {
+function makeTable(
+	id: string,
+	x: number,
+	y: number,
+	preset: TablePreset,
+	kvVars?: string[],
+	kvForm: "dnf" | "knf" = "dnf",
+): DiagTable {
 	const base = { id, x, y, cw: 3, header: true };
 	if (preset === "kv3" || preset === "kv4") {
 		// DNF map: header cells spell out each column/row's minterm; value cells
 		// prefilled 0 for click-to-toggle. Switchable to KNF later.
 		const kv = preset === "kv3" ? 3 : 4;
-		const colHead = kvHeaderRow("dnf");
-		const rowHead = kvHeaderCol(kv, "dnf");
+		const names = kvVars ?? defaultKvVars(kv);
+		const colHead = kvHeaderRow(kvForm, names);
+		const rowHead = kvHeaderCol(kv, kvForm, names);
 		const cells = [["", ...colHead], ...rowHead.map((rl) => [rl, "0", "0", "0", "0"])];
 		return {
 			...base,
@@ -160,7 +173,8 @@ function makeTable(id: string, x: number, y: number, preset: TablePreset): DiagT
 			cells,
 			cellToggle: true,
 			kv,
-			form: "dnf",
+			form: kvForm,
+			kvVars: names,
 		};
 	}
 	// Quine-McCluskey combination worksheet (German row-per-term layout):
@@ -204,10 +218,19 @@ export default function App() {
 	const [pendingFrom, setPendingFrom] = useState<string | null>(null);
 	const [pendingCorner, setPendingCorner] = useState<{ x: number; y: number } | null>(null);
 	const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
-	const [view, setView] = useState({ x: -GRID, y: -GRID, w: PAGE_W + 2 * GRID });
+	const [view, setView] = useState({ x: -GRID, y: -GRID, w: DEFAULT_VIEW_W });
 	const [aspect, setAspect] = useState(H / W); // canvas height/width, keeps the grid full-bleed
 	const [labelScale, setLabelScale] = useState(1.4);
 	const [tablePreset, setTablePreset] = useState<TablePreset>("blank");
+	const [tablesJumpOpen, setTablesJumpOpen] = useState(false);
+	const [kvSetup, setKvSetup] = useState<{
+		id: string;
+		x: number;
+		y: number;
+		preset: "kv3" | "kv4";
+		vars: string[];
+		form: "dnf" | "knf";
+	} | null>(null);
 	const [cellSel, setCellSel] = useState<{
 		id: string;
 		row: number;
@@ -225,6 +248,12 @@ export default function App() {
 	const svgRef = useRef<SVGSVGElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const labelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+	const expandedApplyRef = useRef<(value: string) => void>(() => {});
+	const [expandedEditor, setExpandedEditor] = useState<{
+		title: string;
+		value: string;
+		multiline: boolean;
+	} | null>(null);
 	const attachLabel = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
 		labelInputRef.current = el;
 	};
@@ -250,6 +279,34 @@ export default function App() {
 	}, []);
 
 	const viewBox: View = { x: view.x, y: view.y, w: view.w, h: view.w * aspect };
+
+	function openExpandedEditor(title: string, value: string, multiline: boolean, onChange: (next: string) => void) {
+		expandedApplyRef.current = onChange;
+		setExpandedEditor({ title, value, multiline });
+	}
+
+	function setExpandedValue(value: string) {
+		setExpandedEditor((prev) => (prev ? { ...prev, value } : prev));
+		expandedApplyRef.current(value);
+	}
+
+	const modalPreviewSource = expandedEditor ? expandedEditor.value.replace(/\n/g, "\\\\") : "";
+	const modalPreviewLines = Math.max(1, modalPreviewSource.split(/\\\\/).length);
+	const modalPreviewHeight = Math.min(220, modalPreviewLines * 30 + 20);
+
+	function createKvFromSetup() {
+		if (!kvSetup) return;
+		const names = kvSetup.vars.map((v, i) => (v.trim() ? v.trim() : `x_${i + 1}`));
+		dispatch({
+			type: "ADD_TABLE",
+			table: makeTable(kvSetup.id, kvSetup.x, kvSetup.y, kvSetup.preset, names, kvSetup.form),
+		});
+		returnModeRef.current = "table";
+		setMode("select");
+		setSelection({ kind: "table", id: kvSetup.id });
+		setCellSel(null);
+		setKvSetup(null);
+	}
 
 	// Keep the cell being edited in the top part of the view — the on-screen
 	// gaze keyboard covers the lower half, so a cell that drifts below ~45% of
@@ -352,7 +409,7 @@ export default function App() {
 	}
 
 	function resetView() {
-		setView({ x: -GRID, y: -GRID, w: PAGE_W + 2 * GRID });
+		setView({ x: -GRID, y: -GRID, w: DEFAULT_VIEW_W });
 	}
 
 	function jumpToPage(index: number) {
@@ -419,11 +476,14 @@ export default function App() {
 					id,
 					x: Math.round(view.x / GRID) + 2,
 					y: Math.round(view.y / GRID) + 2,
+					hlCols: [],
+					hlRows: [],
 				},
 			});
 			setMode("select");
 			setSelection({ kind: "table", id });
-			setCellSel(null);
+			setCellSel({ id, row: 0, col: 0 });
+			focusLabelRef.current = true;
 		};
 		navigator.clipboard
 			.readText()
@@ -542,13 +602,25 @@ export default function App() {
 			focusLabelRef.current = true;
 		} else if (mode === "table") {
 			if (tablePreset !== "blank") {
-				// truth table / KV map: single dwell — structure is fixed
+				// table presets place with one dwell; KV opens a setup modal first
 				const id = crypto.randomUUID();
-				dispatch({ type: "ADD_TABLE", table: makeTable(id, gx, gy, tablePreset) });
-				returnModeRef.current = "table";
-				setMode("select");
-				setSelection({ kind: "table", id });
-				setCellSel(null);
+				if (tablePreset === "kv3" || tablePreset === "kv4") {
+					const kv = tablePreset === "kv3" ? 3 : 4;
+					setKvSetup({
+						id,
+						x: gx,
+						y: gy,
+						preset: tablePreset,
+						vars: defaultKvVars(kv),
+						form: "dnf",
+					});
+				} else {
+					dispatch({ type: "ADD_TABLE", table: makeTable(id, gx, gy, tablePreset) });
+					returnModeRef.current = "table";
+					setMode("select");
+					setSelection({ kind: "table", id });
+					setCellSel(null);
+				}
 			} else if (pendingCorner === null) {
 				// blank table: draw a region with two corners
 				setPendingCorner({ x: gx, y: gy });
@@ -1369,16 +1441,20 @@ export default function App() {
 
 				{doc.tables.length > 0 && (
 					<div className="group">
-						<span className="group-title">Tables — jump to</span>
-						{doc.tables.map((tb, i) => (
-							<button
-								key={tb.id}
-								className={selection?.kind === "table" && selection.id === tb.id ? "active" : ""}
-								onClick={() => focusTable(tb)}
-							>
-								{i + 1} · {tableLabel(tb)}
-							</button>
-						))}
+						<button className="group-toggle" onClick={() => setTablesJumpOpen((v) => !v)}>
+							<span>Tables — jump to ({doc.tables.length})</span>
+							<span>{tablesJumpOpen ? "▾" : "▸"}</span>
+						</button>
+						{tablesJumpOpen &&
+							doc.tables.map((tb, i) => (
+								<button
+									key={tb.id}
+									className={selection?.kind === "table" && selection.id === tb.id ? "active" : ""}
+									onClick={() => focusTable(tb)}
+								>
+									{i + 1} · {tableLabel(tb)}
+								</button>
+							))}
 					</div>
 				)}
 
@@ -1554,6 +1630,103 @@ export default function App() {
 						▶
 					</button>
 				</div>
+				{expandedEditor && (
+					<div className="editor-modal-backdrop" onClick={() => setExpandedEditor(null)}>
+						<div className="editor-modal" onClick={(e) => e.stopPropagation()}>
+							<div className="editor-modal-title">{expandedEditor.title}</div>
+							<div className="editor-modal-preview-wrap">
+								<div className="editor-modal-preview-title">Preview</div>
+								{expandedEditor.value.trim() ? (
+									<div className="editor-modal-preview">
+										<svg className="editor-modal-preview-svg" style={{ height: `${modalPreviewHeight}px` }}>
+											<text x={12} y={24} className="editor-modal-preview-text">
+												{renderLines(modalPreviewSource, 12, 30)}
+											</text>
+										</svg>
+									</div>
+								) : (
+									<div className="editor-modal-preview empty">(empty)</div>
+								)}
+							</div>
+							{expandedEditor.multiline ? (
+								<textarea
+									autoFocus
+									className="editor-modal-input"
+									rows={10}
+									value={expandedEditor.value}
+									onChange={(e) => setExpandedValue(e.target.value)}
+									onKeyDown={(e) => {
+										if (e.key === "Escape") setExpandedEditor(null);
+									}}
+								/>
+							) : (
+								<input
+									autoFocus
+									className="editor-modal-input"
+									value={expandedEditor.value}
+									onChange={(e) => setExpandedValue(e.target.value)}
+									onKeyDown={(e) => {
+										if (e.key === "Escape") setExpandedEditor(null);
+									}}
+								/>
+							)}
+							<div className="editor-modal-actions">
+								<button onClick={() => setExpandedEditor(null)}>Done</button>
+							</div>
+						</div>
+					</div>
+				)}
+				{kvSetup && (
+					<div className="editor-modal-backdrop" onClick={() => setKvSetup(null)}>
+						<div className="editor-modal" onClick={(e) => e.stopPropagation()}>
+							<div className="editor-modal-title">KV setup</div>
+							<div className="kv-setup-head">Name variables and choose the starting normal form.</div>
+							<div className="kv-form-switch">
+								<button
+									className={kvSetup.form === "dnf" ? "active" : ""}
+									onClick={() => setKvSetup((p) => (p ? { ...p, form: "dnf" } : p))}
+								>
+									DNF
+								</button>
+								<button
+									className={kvSetup.form === "knf" ? "active" : ""}
+									onClick={() => setKvSetup((p) => (p ? { ...p, form: "knf" } : p))}
+								>
+									KNF
+								</button>
+							</div>
+							<div className="kv-var-grid">
+								{kvSetup.vars.map((name, i) => (
+									<label key={i} className="kv-var-item">
+										<span>Var {i + 1}</span>
+										<input
+											autoFocus={i === 0}
+											value={name}
+											onChange={(e) =>
+												setKvSetup((prev) => {
+													if (!prev) return prev;
+													const vars = prev.vars.slice();
+													vars[i] = e.target.value;
+													return { ...prev, vars };
+												})
+											}
+											onKeyDown={(e) => {
+												if (e.key === "Escape") setKvSetup(null);
+												if (e.key === "Enter") createKvFromSetup();
+											}}
+										/>
+									</label>
+								))}
+							</div>
+							<div className="editor-modal-actions">
+								<button className="danger" onClick={() => setKvSetup(null)}>
+									Cancel
+								</button>
+								<button onClick={createKvFromSetup}>Create KV table</button>
+							</div>
+						</div>
+					</div>
+				)}
 			</main>
 
 			<aside className="inspector">
@@ -1576,6 +1749,17 @@ export default function App() {
 									onKeyDown={handleLabelKey}
 									autoFocus
 								/>
+								<button
+									type="button"
+									className="expand-field-btn"
+									onClick={() =>
+										openExpandedEditor("Node label", selectedNode.label, false, (value) =>
+											dispatch({ type: "SET_NODE_LABEL", id: selectedNode.id, label: value }),
+										)
+									}
+								>
+									Expand
+								</button>
 							</label>
 						)}
 						{selectedNode.shape === "dot" && (
@@ -1661,6 +1845,17 @@ export default function App() {
 								onKeyDown={handleLabelKey}
 								autoFocus
 							/>
+							<button
+								type="button"
+								className="expand-field-btn"
+								onClick={() =>
+									openExpandedEditor("Transition label", selectedEdge.label, false, (value) =>
+										dispatch({ type: "SET_EDGE_LABEL", id: selectedEdge.id, label: value }),
+									)
+								}
+							>
+								Expand
+							</button>
 						</label>
 						{selectedEdge.from !== selectedEdge.to && (
 							<>
@@ -1728,6 +1923,17 @@ export default function App() {
 								}
 								onKeyDown={handleLabelKey}
 							/>
+							<button
+								type="button"
+								className="expand-field-btn"
+								onClick={() =>
+									openExpandedEditor("Line label", selectedLine?.label ?? "", false, (value) =>
+										dispatch({ type: "SET_LINE_LABEL", id: selectedLineId, label: value }),
+									)
+								}
+							>
+								Expand
+							</button>
 						</label>
 						<span className="group-title">Label position</span>
 						<div className="curve-row">
@@ -1797,6 +2003,17 @@ export default function App() {
 								}}
 								autoFocus
 							/>
+							<button
+								type="button"
+								className="expand-field-btn"
+								onClick={() =>
+									openExpandedEditor("Text", selectedText.text, true, (value) =>
+										dispatch({ type: "SET_TEXT", id: selectedText.id, text: value }),
+									)
+								}
+							>
+								Expand
+							</button>
 						</label>
 						<span className="group-title">Text options</span>
 						<div className="btn-grid">
@@ -1853,6 +2070,17 @@ export default function App() {
 								onKeyDown={handleLabelKey}
 								autoFocus
 							/>
+							<button
+								type="button"
+								className="expand-field-btn"
+								onClick={() =>
+									openExpandedEditor("Label text", selectedText.text, false, (value) =>
+										dispatch({ type: "SET_TEXT", id: selectedText.id, text: value }),
+									)
+								}
+							>
+								Expand
+							</button>
 						</label>
 						<span className="group-title">Move (1/4 cell)</span>
 						<div className="dpad">
@@ -1890,6 +2118,27 @@ export default function App() {
 									onBlur={finalizeCell}
 									autoFocus
 								/>
+								<button
+									type="button"
+									className="expand-field-btn"
+									onClick={() =>
+										openExpandedEditor(
+											`Cell r${cellSel.row + 1} c${cellSel.col + 1}`,
+											selectedTable.cells[cellSel.row]?.[cellSel.col] ?? "",
+											false,
+											(value) =>
+												dispatch({
+													type: "SET_TABLE_CELL",
+													id: selectedTable.id,
+													row: cellSel.row,
+													col: cellSel.col,
+													text: selectedTable.math ? boolConvert(value, false) : value,
+												}),
+										)
+									}
+								>
+									Expand
+								</button>
 							</label>
 						)}
 						{cellSel && cellSel.id === selectedTable.id && (
@@ -2094,6 +2343,21 @@ export default function App() {
 										}
 									/>
 									<button
+										type="button"
+										onClick={() =>
+											openExpandedEditor("Loop label", lp.label, false, (value) =>
+												dispatch({
+													type: "SET_LOOP_LABEL",
+													id: selectedTable.id,
+													loopId: lp.id,
+													label: selectedTable.math ? boolConvert(value, false) : value,
+												}),
+											)
+										}
+									>
+										Expand
+									</button>
+									<button
 										className={lp.wrapH ? "active" : ""}
 										title="Wrap across left/right edges"
 										onClick={() =>
@@ -2176,6 +2440,23 @@ export default function App() {
 									}
 									onKeyDown={handleDerivKey}
 								/>
+								<button
+									type="button"
+									className="expand-field-btn"
+									onClick={() =>
+										openExpandedEditor("Derivation relation", selectedDeriv.steps[derivStep].rel, false, (value) =>
+											dispatch({
+												type: "SET_DERIV",
+												id: selectedDeriv.id,
+												index: derivStep,
+												field: "rel",
+												value,
+											}),
+										)
+									}
+								>
+									Expand
+								</button>
 							</label>
 						)}
 						<label>
@@ -2199,6 +2480,23 @@ export default function App() {
 								onKeyDown={handleDerivKey}
 								autoFocus
 							/>
+							<button
+								type="button"
+								className="expand-field-btn"
+								onClick={() =>
+									openExpandedEditor("Derivation expression", selectedDeriv.steps[derivStep].expr, true, (value) =>
+										dispatch({
+											type: "SET_DERIV",
+											id: selectedDeriv.id,
+											index: derivStep,
+											field: "expr",
+											value: boolConvert(value, false),
+										}),
+									)
+								}
+							>
+								Expand
+							</button>
 						</label>
 						{derivStep > 0 && (
 							<label>
@@ -2217,6 +2515,23 @@ export default function App() {
 									}
 									onKeyDown={handleDerivKey}
 								/>
+								<button
+									type="button"
+									className="expand-field-btn"
+									onClick={() =>
+										openExpandedEditor("Derivation reason", selectedDeriv.steps[derivStep].reason, false, (value) =>
+											dispatch({
+												type: "SET_DERIV",
+												id: selectedDeriv.id,
+												index: derivStep,
+												field: "reason",
+												value,
+											}),
+										)
+									}
+								>
+									Expand
+								</button>
 							</label>
 						)}
 						<div className="btn-grid">
