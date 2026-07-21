@@ -93,6 +93,7 @@ export interface DiagTable {
 	loops?: TableLoop[]; // KV/Karnaugh group markings
 	kv?: number; // 3 or 4: KV map variable count (for the DNF/KNF form switch)
 	cellToggle?: boolean; // clicking a value cell toggles 0/1 (KV maps)
+	cellToggleLocked?: boolean; // when true, KV cell clicks no longer auto-flip 0/1
 	checkCol?: number; // body cells in this column toggle empty/✓ on click (QM ✓)
 	pi?: boolean; // prime-implicant chart: coverage cells toggle empty/X, joined
 	// by a per-row line spanning the covered minterms

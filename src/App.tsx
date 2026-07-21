@@ -5,7 +5,7 @@ import { useEditor } from "./store";
 import { exportPng } from "./exportPng";
 import { printA4 } from "./printA4";
 import { GATES, GATE_ORDER } from "./gates";
-import { GRID, W, H, PAGE_W, PAGE_H, PAGE_MARGIN, pageTop } from "./geometry";
+import { GRID, W, H, PAGE_W, PAGE_H, PAGE_MARGIN, pageTop, halfExtents } from "./geometry";
 import { tableToLatex, derivToLatex } from "./latex";
 import { kvHeaderRow, kvHeaderCol } from "./kv";
 import type { Doc, DiagTable, DerivField, LabelPos, LineArrow, Mode, RelType, Selection, Shape } from "./types";
@@ -525,6 +525,11 @@ export default function App() {
 		// group mode: two empty-canvas dwells define a box; everything inside is
 		// added to the selection (individual item toggles still work alongside).
 		if (multiMode) {
+			if (multi.length > 0 && pendingCorner === null) {
+				const anchor = multiAnchor();
+				if (anchor) moveMulti(gx - anchor.x, gy - anchor.y);
+				return;
+			}
 			if (pendingCorner === null) {
 				setPendingCorner({ x: gx, y: gy });
 				setHoverCell({ x: gx, y: gy });
@@ -745,7 +750,7 @@ export default function App() {
 		// KV value cell (not a header): a click flips 0/1. The cell is still
 		// selected so you can type something else (e.g. "-") in the field.
 		const tbl = doc.tables.find((t) => t.id === id);
-		if (!loopMode && tbl?.cellToggle && row > 0 && col > 0) {
+		if (!loopMode && tbl?.cellToggle && !tbl.cellToggleLocked && row > 0 && col > 0) {
 			const cur = tbl.cells[row]?.[col] ?? "";
 			dispatch({ type: "SET_TABLE_CELL", id, row, col, text: cur === "0" ? "1" : "0" });
 			returnModeRef.current = null;
@@ -977,6 +982,42 @@ export default function App() {
 			const have = new Set(prev.map((r) => `${r.kind}:${r.id}`));
 			return [...prev, ...found.filter((r) => !have.has(`${r.kind}:${r.id}`))];
 		});
+	}
+
+	function multiAnchor(): { x: number; y: number } | null {
+		if (multi.length === 0) return null;
+		let minX = Infinity;
+		let minY = Infinity;
+		for (const ref of multi) {
+			if (ref.kind === "node") {
+				const n = doc.nodes.find((x) => x.id === ref.id);
+				if (!n) continue;
+				const { hw, hh } = halfExtents(n);
+				minX = Math.min(minX, n.x - hw / GRID);
+				minY = Math.min(minY, n.y - hh / GRID);
+			} else if (ref.kind === "line") {
+				const l = doc.lines.find((x) => x.id === ref.id);
+				if (!l) continue;
+				minX = Math.min(minX, l.x1, l.x2);
+				minY = Math.min(minY, l.y1, l.y2);
+			} else if (ref.kind === "text") {
+				const t = doc.texts.find((x) => x.id === ref.id);
+				if (!t) continue;
+				minX = Math.min(minX, t.x);
+				minY = Math.min(minY, t.y);
+			} else if (ref.kind === "table") {
+				const tb = doc.tables.find((x) => x.id === ref.id);
+				if (!tb) continue;
+				minX = Math.min(minX, tb.x);
+				minY = Math.min(minY, tb.y);
+			} else if (ref.kind === "deriv") {
+				const d = doc.derivations.find((x) => x.id === ref.id);
+				if (!d) continue;
+				minX = Math.min(minX, d.x);
+				minY = Math.min(minY, d.y);
+			}
+		}
+		return Number.isFinite(minX) && Number.isFinite(minY) ? { x: minX, y: minY } : null;
 	}
 
 	// nudge every part in the group selection together, as one undo step
@@ -1913,6 +1954,7 @@ export default function App() {
 							Label
 							<input
 								ref={attachLabel}
+								autoFocus
 								value={selectedLine?.label ?? ""}
 								onChange={(e) =>
 									dispatch({
@@ -1921,7 +1963,17 @@ export default function App() {
 										label: e.target.value,
 									})
 								}
-								onKeyDown={handleLabelKey}
+								onKeyDown={(e) => {
+									if (e.key === "Tab") {
+										e.preventDefault();
+										const order: LabelPos[] = ["start", "middle", "end"];
+										const cur = selectedLine?.labelPos ?? "middle";
+										const next = order[(order.indexOf(cur) + (e.shiftKey ? 2 : 1)) % 3];
+										setLineLabelPos(selectedLineId, next);
+									} else {
+										handleLabelKey(e);
+									}
+								}}
 							/>
 							<button
 								type="button"
@@ -2301,6 +2353,18 @@ export default function App() {
 										KNF
 									</button>
 								</div>
+							</>
+						)}
+						{selectedTable.cellToggle && (
+							<>
+								<span className="group-title">KV click behavior</span>
+								<button
+									className={selectedTable.cellToggleLocked ? "active" : ""}
+									onClick={() => dispatch({ type: "TOGGLE_CELL_TOGGLE_LOCK", id: selectedTable.id })}
+									title="Lock to stop click-flipping 0/1 in KV value cells"
+								>
+									{selectedTable.cellToggleLocked ? "Click flip locked" : "Click flip unlocked"}
+								</button>
 							</>
 						)}
 						{selectedTable.inputCols && (

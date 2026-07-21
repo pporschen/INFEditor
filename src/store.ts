@@ -56,6 +56,7 @@ export type Action =
 	| { type: "CLEAR_HIGHLIGHTS"; id: string }
 	| { type: "TOGGLE_TABLE_HEADER"; id: string }
 	| { type: "TOGGLE_TABLE_MATH"; id: string }
+	| { type: "TOGGLE_CELL_TOGGLE_LOCK"; id: string }
 	| { type: "TOGGLE_TABLE_FORM"; id: string }
 	| { type: "FILL_TABLE_INPUTS"; id: string }
 	| { type: "MOVE_TABLE"; id: string; x: number; y: number }
@@ -448,6 +449,13 @@ function docReducer(doc: Doc, a: Action): Doc {
 			return {
 				...doc,
 				tables: doc.tables.map((t) => (t.id === a.id ? { ...t, math: !t.math } : t)),
+			};
+		case "TOGGLE_CELL_TOGGLE_LOCK":
+			return {
+				...doc,
+				tables: doc.tables.map((t) =>
+					t.id === a.id ? { ...t, cellToggleLocked: !t.cellToggleLocked } : t,
+				),
 			};
 		case "TOGGLE_TABLE_FORM":
 			return {
