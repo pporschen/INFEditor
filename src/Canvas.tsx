@@ -25,6 +25,7 @@ const OP: Record<string, string> = {
 	implies: "⇒",
 	Leftrightarrow: "⇔",
 	iff: "⇔",
+	neq: "≠",
 	ss: "ß",
 };
 
@@ -61,6 +62,7 @@ function opsToUnicode(s: string): string {
 		.replace(/\\vee/g, "∨")
 		.replace(/\\land/g, "∧")
 		.replace(/\\wedge/g, "∧")
+		.replace(/\\neq/g, "≠")
 		.replace(/\\ss/g, "ß")
 		.replace(/\\"\{?([a-zA-Z])\}?/g, (_, c) => UMLAUT[c] ?? c + "̈");
 }
@@ -120,7 +122,7 @@ export function renderRich(s: string): ReactNode {
 				continue;
 			}
 			const m =
-				/^\\(overline|bar|cdot|oplus|lnot|neg|lor|vee|land|wedge|left|right|Rightarrow|implies|Leftrightarrow|iff|ss)/.exec(
+				/^\\(overline|bar|cdot|oplus|lnot|neg|lor|vee|land|wedge|left|right|Rightarrow|implies|Leftrightarrow|iff|neq|ss)/.exec(
 					s.slice(i),
 				);
 			if (m) {
@@ -206,6 +208,28 @@ export function renderLines(
 	));
 }
 
+function renderTextLineWithMath(s: string): ReactNode {
+	const out: ReactNode[] = [];
+	let start = 0;
+	let key = 0;
+	while (start < s.length) {
+		const open = s.indexOf("$", start);
+		if (open < 0) {
+			if (start < s.length) out.push(s.slice(start));
+			break;
+		}
+		const close = s.indexOf("$", open + 1);
+		if (close < 0) {
+			out.push(s.slice(start));
+			break;
+		}
+		if (open > start) out.push(s.slice(start, open));
+		out.push(<Fragment key={key++}>{renderRich(s.slice(open + 1, close))}</Fragment>);
+		start = close + 1;
+	}
+	return out.length > 0 ? out : s;
+}
+
 // Map a relationship type to its markers and line style.
 // diamonds sit at the SOURCE end; arrows/triangles at the TARGET end.
 function relStyle(rel: DiagEdge["rel"]): {
@@ -256,6 +280,7 @@ interface Props {
 	onEdgeClick: (id: string) => void;
 	onLineClick: (id: string) => void;
 	onTextClick: (id: string) => void;
+	onImageClick: (id: string) => void;
 	onTextCaret: (id: string, offset: number) => void;
 	cellSel: { id: string; row: number; col: number } | null;
 	loopFirst: { id: string; row: number; col: number } | null;
@@ -284,6 +309,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 		onEdgeClick,
 		onLineClick,
 		onTextClick,
+		onImageClick,
 		onTextCaret,
 		cellSel,
 		loopFirst,
@@ -307,7 +333,8 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 	// While placing shapes/dots or drawing wires, let every click fall through to
 	// the grid — otherwise existing nodes/edges/lines would swallow the click and
 	// you couldn't place, e.g., a dot on top of a line intersection.
-	const placing = mode === "node" || mode === "line" || mode === "text" || mode === "table" || mode === "deriv";
+	const placing =
+		mode === "node" || mode === "line" || mode === "text" || mode === "image" || mode === "table" || mode === "deriv";
 	const hitProps = placing ? { pointerEvents: "none" as const } : {};
 
 	// grid line positions covering the visible view (world coordinates)
@@ -1117,7 +1144,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 													onTextCaret(t.id, offset);
 												}}
 											>
-												{ln || " "}
+												{ln ? renderTextLineWithMath(ln) : " "}
 											</tspan>
 										))}
 									</text>
@@ -1137,6 +1164,32 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 						);
 					})}
 				</g>
+
+				{/* Images */}
+				{doc.images.map((img) => {
+					const selected = selection?.kind === "image" && selection.id === img.id;
+					const px = img.x * GRID;
+					const py = img.y * GRID;
+					const pw = img.w * GRID;
+					const ph = img.h * GRID;
+					return (
+						<g key={img.id}>
+							<image
+								href={img.dataUrl}
+								x={px}
+								y={py}
+								width={pw}
+								height={ph}
+								className={`diagram-image${selected ? " selected" : ""}`}
+								onClick={() => onImageClick(img.id)}
+								{...hitProps}
+							/>
+							{selected && (
+								<rect x={px} y={py} width={pw} height={ph} className="ui-only selection-outline" pointerEvents="none" />
+							)}
+						</g>
+					);
+				})}
 			</g>
 			{/* end #content */}
 

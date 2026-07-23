@@ -114,6 +114,16 @@ export interface DerivStep {
 	reason: string;
 }
 
+// A pasted image (PNG data URL) placed on the canvas.
+export interface DiagImage {
+	id: string;
+	x: number; // top-left grid column
+	y: number; // top-left grid row
+	w: number; // width in grid cells
+	h: number; // height in grid cells
+	dataUrl: string; // base64 PNG data URL
+}
+
 // A multi-line derivation → exports to a LaTeX align* block. Formatting only.
 export interface DiagDerivation {
 	id: string;
@@ -128,6 +138,7 @@ export interface Doc {
 	edges: DiagEdge[];
 	lines: DiagLine[];
 	texts: DiagText[];
+	images: DiagImage[];
 	tables: DiagTable[];
 	derivations: DiagDerivation[];
 	pages: number; // number of stacked A4 pages
@@ -135,13 +146,14 @@ export interface Doc {
 
 export type DerivField = "rel" | "expr" | "reason";
 
-export type Mode = "select" | "node" | "edge" | "line" | "text" | "table" | "deriv" | "delete";
+export type Mode = "select" | "node" | "edge" | "line" | "text" | "table" | "image" | "deriv" | "delete";
 
 export type Selection =
 	| { kind: "node"; id: string }
 	| { kind: "edge"; id: string }
 	| { kind: "line"; id: string }
 	| { kind: "text"; id: string }
+	| { kind: "image"; id: string }
 	| { kind: "table"; id: string }
 	| { kind: "deriv"; id: string }
 	| null;

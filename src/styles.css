@@ -432,6 +432,16 @@ button.active kbd {
   fill: var(--accent);
 }
 
+/* pasted image */
+.diagram-image {
+  cursor: pointer;
+  opacity: 0.95;
+}
+.diagram-image.selected {
+  opacity: 1;
+  filter: brightness(1.1);
+}
+
 /* edges */
 .edge {
   cursor: pointer;

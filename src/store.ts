@@ -43,6 +43,10 @@ export type Action =
 	| { type: "TOGGLE_TEXT_BOLD"; id: string }
 	| { type: "MOVE_TEXT"; id: string; x: number; y: number }
 	| { type: "DELETE_TEXT"; id: string }
+	| { type: "ADD_IMAGE"; id: string; x: number; y: number; w: number; h: number; dataUrl: string }
+	| { type: "MOVE_IMAGE"; id: string; x: number; y: number }
+	| { type: "RESIZE_IMAGE"; id: string; w: number; h: number }
+	| { type: "DELETE_IMAGE"; id: string }
 	| { type: "ADD_TABLE"; table: DiagTable }
 	| { type: "SET_TABLE_CELL"; id: string; row: number; col: number; text: string }
 	| { type: "TABLE_ROWS"; id: string; delta: number }
@@ -301,6 +305,33 @@ function docReducer(doc: Doc, a: Action): Doc {
 			};
 		case "DELETE_TEXT":
 			return { ...doc, texts: doc.texts.filter((t) => t.id !== a.id) };
+		case "ADD_IMAGE":
+			return {
+				...doc,
+				images: [
+					...doc.images,
+					{
+						id: a.id,
+						x: a.x,
+						y: a.y,
+						w: a.w,
+						h: a.h,
+						dataUrl: a.dataUrl,
+					},
+				],
+			};
+		case "MOVE_IMAGE":
+			return {
+				...doc,
+				images: doc.images.map((img) => (img.id === a.id ? { ...img, x: a.x, y: a.y } : img)),
+			};
+		case "RESIZE_IMAGE":
+			return {
+				...doc,
+				images: doc.images.map((img) => (img.id === a.id ? { ...img, w: a.w, h: a.h } : img)),
+			};
+		case "DELETE_IMAGE":
+			return { ...doc, images: doc.images.filter((img) => img.id !== a.id) };
 		case "ADD_TABLE":
 			return { ...doc, tables: [...doc.tables, a.table] };
 		case "SET_TABLE_CELL":
@@ -453,9 +484,7 @@ function docReducer(doc: Doc, a: Action): Doc {
 		case "TOGGLE_CELL_TOGGLE_LOCK":
 			return {
 				...doc,
-				tables: doc.tables.map((t) =>
-					t.id === a.id ? { ...t, cellToggleLocked: !t.cellToggleLocked } : t,
-				),
+				tables: doc.tables.map((t) => (t.id === a.id ? { ...t, cellToggleLocked: !t.cellToggleLocked } : t)),
 			};
 		case "TOGGLE_TABLE_FORM":
 			return {

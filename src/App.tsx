@@ -76,6 +76,7 @@ function normalizeDoc(d: unknown): Doc {
 		edges: o.edges ?? [],
 		lines: o.lines ?? [],
 		texts: o.texts ?? [],
+		images: o.images ?? [],
 		tables: o.tables ?? [],
 		derivations: o.derivations ?? [],
 		pages: o.pages ?? 1,
@@ -217,6 +218,7 @@ export default function App() {
 	const [multi, setMulti] = useState<{ kind: string; id: string }[]>([]);
 	const [pendingFrom, setPendingFrom] = useState<string | null>(null);
 	const [pendingCorner, setPendingCorner] = useState<{ x: number; y: number } | null>(null);
+	const [pendingImage, setPendingImage] = useState<string | null>(null); // base64 PNG data URL after paste
 	const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
 	const [view, setView] = useState({ x: -GRID, y: -GRID, w: DEFAULT_VIEW_W });
 	const [aspect, setAspect] = useState(H / W); // canvas height/width, keeps the grid full-bleed
@@ -376,6 +378,8 @@ export default function App() {
 	const selectedLine = selection?.kind === "line" ? (doc.lines.find((l) => l.id === selection.id) ?? null) : null;
 	const selectedLineId = selectedLine?.id ?? null;
 	const selectedText = selection?.kind === "text" ? (doc.texts.find((t) => t.id === selection.id) ?? null) : null;
+	const selectedImage =
+		selection?.kind === "image" ? (doc.images.find((img) => img.id === selection.id) ?? null) : null;
 	const selectedTable = selection?.kind === "table" ? (doc.tables.find((t) => t.id === selection.id) ?? null) : null;
 	const selectedDeriv =
 		selection?.kind === "deriv" ? (doc.derivations.find((d) => d.id === selection.id) ?? null) : null;
@@ -605,6 +609,25 @@ export default function App() {
 			setMode("select");
 			setSelection({ kind: "text", id });
 			focusLabelRef.current = true;
+		} else if (mode === "image") {
+			// place the pasted image at the clicked location
+			if (pendingImage) {
+				const id = crypto.randomUUID();
+				// default image size: 4x4 grid cells (caller can resize in inspector)
+				dispatch({
+					type: "ADD_IMAGE",
+					id,
+					x: gx,
+					y: gy,
+					w: 4,
+					h: 4,
+					dataUrl: pendingImage,
+				});
+				setPendingImage(null); // clear the pending image
+				returnModeRef.current = "image";
+				setMode("select");
+				setSelection({ kind: "image", id });
+			}
 		} else if (mode === "table") {
 			if (tablePreset !== "blank") {
 				// table presets place with one dwell; KV opens a setup modal first
@@ -681,6 +704,8 @@ export default function App() {
 			dispatch({ type: "MOVE_NODE", id: selection.id, x: gx, y: gy });
 		} else if (mode === "select" && selection?.kind === "text") {
 			dispatch({ type: "MOVE_TEXT", id: selection.id, x: gx, y: gy });
+		} else if (mode === "select" && selection?.kind === "image") {
+			dispatch({ type: "MOVE_IMAGE", id: selection.id, x: gx, y: gy });
 		} else if (mode === "select" && selection?.kind === "table") {
 			// clicking empty space moves the table by its top-left corner
 			dispatch({ type: "MOVE_TABLE", id: selection.id, x: gx, y: gy });
@@ -723,6 +748,20 @@ export default function App() {
 			setSelection({ kind: "text", id });
 		} else if (mode === "delete") {
 			dispatch({ type: "DELETE_TEXT", id });
+			setSelection(null);
+		}
+	}
+
+	function handleImageClick(id: string) {
+		if (multiMode) {
+			toggleMulti("image", id);
+			return;
+		}
+		if (mode === "select") {
+			returnModeRef.current = null;
+			setSelection({ kind: "image", id });
+		} else if (mode === "delete") {
+			dispatch({ type: "DELETE_IMAGE", id });
 			setSelection(null);
 		}
 	}
@@ -1272,6 +1311,39 @@ export default function App() {
 		}
 	}
 
+	// paste event handler: extract PNG images from clipboard
+	useEffect(() => {
+		function onPaste(e: ClipboardEvent) {
+			const target = e.target as HTMLElement;
+			if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return; // allow normal paste in text inputs
+
+			const items = e.clipboardData?.items;
+			if (!items) return;
+
+			for (let i = 0; i < items.length; i++) {
+				const item = items[i];
+				if (item.type.startsWith("image/png") || item.type.startsWith("image/")) {
+					e.preventDefault();
+					const blob = item.getAsFile();
+					if (blob) {
+						const reader = new FileReader();
+						reader.onload = (ev) => {
+							if (typeof ev.target?.result === "string") {
+								setPendingImage(ev.target.result); // base64 data URL
+								setMode("image"); // switch to image placement mode
+							}
+						};
+						reader.readAsDataURL(blob);
+					}
+					break; // only process first image
+				}
+			}
+		}
+
+		window.addEventListener("paste", onPaste);
+		return () => window.removeEventListener("paste", onPaste);
+	}, []);
+
 	// keyboard shortcuts (also usable via an on-screen keyboard)
 	useEffect(() => {
 		function onKey(e: KeyboardEvent) {
@@ -1298,6 +1370,9 @@ export default function App() {
 				case "t":
 					changeMode("text");
 					break;
+				case "i":
+					if (pendingImage) changeMode("image");
+					break;
 				case "b":
 					changeMode("table");
 					break;
@@ -1321,6 +1396,7 @@ export default function App() {
 					else if (selection?.kind === "edge") dispatch({ type: "DELETE_EDGE", id: selection.id });
 					else if (selection?.kind === "line") dispatch({ type: "DELETE_LINE", id: selection.id });
 					else if (selection?.kind === "text") dispatch({ type: "DELETE_TEXT", id: selection.id });
+					else if (selection?.kind === "image") dispatch({ type: "DELETE_IMAGE", id: selection.id });
 					else if (selection?.kind === "table") dispatch({ type: "DELETE_TABLE", id: selection.id });
 					else if (selection?.kind === "deriv") dispatch({ type: "DELETE_DERIV", id: selection.id });
 					setSelection(null);
@@ -1355,6 +1431,14 @@ export default function App() {
 						</button>
 						<button className={mode === "text" ? "active" : ""} onClick={() => changeMode("text")}>
 							Text <kbd>t</kbd>
+						</button>
+						<button
+							className={mode === "image" ? "active" : ""}
+							onClick={() => changeMode("image")}
+							title={pendingImage ? "Click canvas to place image" : "Paste an image first (Ctrl+V)"}
+							disabled={!pendingImage}
+						>
+							Image <kbd>i</kbd>
 						</button>
 						<button className={mode === "table" ? "active" : ""} onClick={() => changeMode("table")}>
 							Table <kbd>b</kbd>
@@ -1643,6 +1727,7 @@ export default function App() {
 					onEdgeClick={handleEdgeClick}
 					onLineClick={handleLineClick}
 					onTextClick={handleTextClick}
+					onImageClick={handleImageClick}
 					onTextCaret={handleTextCaret}
 					cellSel={cellSel}
 					loopFirst={loopFirst}
@@ -2144,6 +2229,138 @@ export default function App() {
 							<button onClick={() => nudgeText(LINE_STEP, 0)}>→</button>
 							<span />
 							<button onClick={() => nudgeText(0, LINE_STEP)}>↓</button>
+							<span />
+						</div>
+						<p className="muted">Or dwell an empty cell (Select mode) to move it.</p>
+					</>
+				)}
+				{selectedImage && (
+					<>
+						<span className="group-title">Image</span>
+						<div className="dpad-row">
+							<label>
+								Position X (cells)
+								<input
+									type="number"
+									step="0.5"
+									value={selectedImage.x}
+									onChange={(e) =>
+										dispatch({
+											type: "MOVE_IMAGE",
+											id: selectedImage.id,
+											x: Number(e.target.value),
+											y: selectedImage.y,
+										})
+									}
+								/>
+							</label>
+							<label>
+								Position Y (cells)
+								<input
+									type="number"
+									step="0.5"
+									value={selectedImage.y}
+									onChange={(e) =>
+										dispatch({
+											type: "MOVE_IMAGE",
+											id: selectedImage.id,
+											x: selectedImage.x,
+											y: Number(e.target.value),
+										})
+									}
+								/>
+							</label>
+						</div>
+						<div className="dpad-row">
+							<label>
+								Width (cells)
+								<input
+									type="number"
+									step="0.5"
+									min="1"
+									value={selectedImage.w}
+									onChange={(e) =>
+										dispatch({
+											type: "RESIZE_IMAGE",
+											id: selectedImage.id,
+											w: Math.max(1, Number(e.target.value)),
+											h: selectedImage.h,
+										})
+									}
+								/>
+							</label>
+							<label>
+								Height (cells)
+								<input
+									type="number"
+									step="0.5"
+									min="1"
+									value={selectedImage.h}
+									onChange={(e) =>
+										dispatch({
+											type: "RESIZE_IMAGE",
+											id: selectedImage.id,
+											w: selectedImage.w,
+											h: Math.max(1, Number(e.target.value)),
+										})
+									}
+								/>
+							</label>
+						</div>
+						<span className="group-title">Move (1/4 cell)</span>
+						<div className="dpad">
+							<span />
+							<button
+								onClick={() =>
+									dispatch({
+										type: "MOVE_IMAGE",
+										id: selectedImage.id,
+										x: selectedImage.x,
+										y: selectedImage.y - LINE_STEP,
+									})
+								}
+							>
+								↑
+							</button>
+							<span />
+							<button
+								onClick={() =>
+									dispatch({
+										type: "MOVE_IMAGE",
+										id: selectedImage.id,
+										x: selectedImage.x - LINE_STEP,
+										y: selectedImage.y,
+									})
+								}
+							>
+								←
+							</button>
+							<span />
+							<button
+								onClick={() =>
+									dispatch({
+										type: "MOVE_IMAGE",
+										id: selectedImage.id,
+										x: selectedImage.x + LINE_STEP,
+										y: selectedImage.y,
+									})
+								}
+							>
+								→
+							</button>
+							<span />
+							<button
+								onClick={() =>
+									dispatch({
+										type: "MOVE_IMAGE",
+										id: selectedImage.id,
+										x: selectedImage.x,
+										y: selectedImage.y + LINE_STEP,
+									})
+								}
+							>
+								↓
+							</button>
 							<span />
 						</div>
 						<p className="muted">Or dwell an empty cell (Select mode) to move it.</p>
