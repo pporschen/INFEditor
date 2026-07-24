@@ -613,14 +613,14 @@ export default function App() {
 			// place the pasted image at the clicked location
 			if (pendingImage) {
 				const id = crypto.randomUUID();
-				// default image size: 0x0 grid cells (caller can resize in inspector)
+				// default image size: 10x10 grid cells (caller can resize in inspector)
 				dispatch({
 					type: "ADD_IMAGE",
 					id,
 					x: gx,
 					y: gy,
-					w: 0,
-					h: 0,
+					w: 10,
+					h: 10,
 					dataUrl: pendingImage,
 				});
 				setPendingImage(null); // clear the pending image
