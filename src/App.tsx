@@ -1181,7 +1181,10 @@ export default function App() {
 		if (!selectedDeriv || derivStep == null) return;
 		finalizeDeriv();
 		const idx = derivStep;
-		dispatch({ type: "ADD_DERIV_STEP", id: selectedDeriv.id, after: idx });
+		const currentRel = selectedDeriv.steps[idx]?.rel ?? "=";
+		// If current relation is empty, keep new line plain (empty rel); otherwise default to "="
+		const newRel = currentRel === "" ? "" : "=";
+		dispatch({ type: "ADD_DERIV_STEP", id: selectedDeriv.id, after: idx, rel: newRel });
 		setDerivStep(idx + 1);
 		setDerivField("expr");
 		setSelection({ kind: "deriv", id: selectedDeriv.id }); // force the focus effect
@@ -1356,7 +1359,7 @@ export default function App() {
 
 						// Read blob as data URL
 						const reader = new FileReader();
-						
+
 						reader.onerror = () => {
 							console.error("[paste] FileReader error:", reader.error);
 						};

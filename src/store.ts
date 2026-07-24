@@ -72,7 +72,7 @@ export type Action =
 	| { type: "DEL_TABLE_LOOP"; id: string; loopId: string }
 	| { type: "ADD_DERIV"; derivation: DiagDerivation }
 	| { type: "SET_DERIV"; id: string; index: number; field: DerivField; value: string }
-	| { type: "ADD_DERIV_STEP"; id: string; after: number }
+	| { type: "ADD_DERIV_STEP"; id: string; after: number; rel?: string }
 	| { type: "DEL_DERIV_STEP"; id: string; index: number }
 	| { type: "MOVE_DERIV"; id: string; x: number; y: number }
 	| { type: "MOVE_MANY"; refs: { kind: string; id: string }[]; dx: number; dy: number }
@@ -658,16 +658,18 @@ function docReducer(doc: Doc, a: Action): Doc {
 						: d,
 				),
 			};
-		case "ADD_DERIV_STEP":
+		case "ADD_DERIV_STEP": {
+			const rel = a.rel ?? "=";
 			return {
 				...doc,
 				derivations: doc.derivations.map((d) => {
 					if (d.id !== a.id) return d;
 					const steps = d.steps.slice();
-					steps.splice(a.after + 1, 0, { rel: "=", expr: "", reason: "" });
+					steps.splice(a.after + 1, 0, { rel, expr: "", reason: "" });
 					return { ...d, steps };
 				}),
 			};
+		}
 		case "DEL_DERIV_STEP":
 			return {
 				...doc,
