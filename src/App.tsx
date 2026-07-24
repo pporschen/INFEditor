@@ -1315,79 +1315,82 @@ export default function App() {
 	useEffect(() => {
 		function onPaste(e: ClipboardEvent) {
 			try {
-				const target = e.target as HTMLElement;
 				const clipboardData = e.clipboardData;
-				
-				if (!clipboardData) {
-					console.log("[paste] No clipboard data available");
-					return;
+				if (!clipboardData) return;
+
+				const items = clipboardData.items;
+				if (!items || items.length === 0) return;
+
+				let foundImage = false;
+
+				// Check if any item is an image BEFORE calling preventDefault
+				for (let i = 0; i < items.length; i++) {
+					const item = items[i];
+					if (item.type && item.type.startsWith("image/")) {
+						foundImage = true;
+						break;
+					}
 				}
 
-				const items = Array.from(clipboardData.items ?? []);
-				console.log("[paste] Clipboard items:", items.map(it => ({ kind: it.kind, type: it.type })));
-
-				// Only allow editor text paste if no image
-				const hasImage = items.some(it => it.type && it.type.startsWith("image/"));
-				if (!hasImage) {
-					if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
-						console.log("[paste] No image, delegating to editor");
+				if (!foundImage) {
+					// No image: allow normal paste in text editors
+					const target = e.target as HTMLElement;
+					if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
 						return;
 					}
-					console.log("[paste] No image found in clipboard");
 					return;
 				}
 
-				// Extract first image blob (works with both file-kind and plain image items)
-				let imageBlob: Blob | null = null;
-				for (const item of items) {
+				// Prevent default paste behavior now that we know it's an image
+				e.preventDefault();
+
+				// Find and extract the first image item
+				for (let i = 0; i < items.length; i++) {
+					const item = items[i];
 					if (item.type && item.type.startsWith("image/")) {
 						const blob = item.getAsFile();
-						if (blob && blob.size > 0) {
-							imageBlob = blob;
-							console.log("[paste] Found image blob:", { type: blob.type, size: blob.size });
-							break;
+						if (!blob) {
+							console.warn("[paste] getAsFile() returned null");
+							continue;
 						}
+
+						// Read blob as data URL
+						const reader = new FileReader();
+						
+						reader.onerror = () => {
+							console.error("[paste] FileReader error:", reader.error);
+						};
+
+						reader.onload = (ev) => {
+							try {
+								const result = ev.target?.result;
+								if (typeof result === "string" && result.startsWith("data:image/")) {
+									setPendingImage(result);
+									setMode("image");
+									console.log("[paste] Image placed successfully");
+								} else {
+									console.error("[paste] Unexpected FileReader result type");
+								}
+							} catch (err) {
+								console.error("[paste] Error in FileReader.onload:", err);
+							}
+						};
+
+						reader.readAsDataURL(blob);
+						return; // Stop after first image
 					}
 				}
 
-				if (!imageBlob) {
-					console.log("[paste] Failed to extract image blob");
-					return;
-				}
-
-				e.preventDefault();
-				console.log("[paste] Starting FileReader...");
-
-				const reader = new FileReader();
-				
-				reader.onerror = () => {
-					console.error("[paste] FileReader error:", reader.error);
-				};
-
-				reader.onload = (ev) => {
-					const result = ev.target?.result;
-					if (typeof result === "string") {
-						console.log("[paste] FileReader success, setting pending image and switching to image mode");
-						setPendingImage(result);
-						setMode("image");
-					} else {
-						console.error("[paste] FileReader result was not a string:", typeof result);
-					}
-				};
-
-				reader.readAsDataURL(imageBlob);
+				console.warn("[paste] Found image type but failed to extract blob");
 			} catch (err) {
-				console.error("[paste] Exception:", err);
+				console.error("[paste] Unexpected error in paste handler:", err);
 			}
 		}
 
-		console.log("[paste] Registering paste handlers");
-		document.addEventListener("paste", onPaste, true); // capture phase
-		window.addEventListener("paste", onPaste); // bubble phase
-		
+		// Register handler on document (captures all paste events)
+		document.addEventListener("paste", onPaste, true);
 		return () => {
 			document.removeEventListener("paste", onPaste, true);
-			window.removeEventListener("paste", onPaste);
 		};
 	}, []);
 
