@@ -1264,7 +1264,7 @@ export default function App() {
 					}
 				} else if (growable && col === cols - 1) {
 					// at the last column: append a new column and step into it
-					dispatch({ type: "TABLE_COLS", id: cellSel.id, delta: 1 });
+					dispatch({ type: "TABLE_COLS", id: cellSel.id, delta: 1, after: col });
 					col = col + 1;
 				} else {
 					col++;
@@ -1278,7 +1278,7 @@ export default function App() {
 				e.preventDefault();
 				// at the last row of a free-form table: append a row and step into it
 				if (growable && row === rows - 1) {
-					dispatch({ type: "TABLE_ROWS", id: cellSel.id, delta: 1 });
+					dispatch({ type: "TABLE_ROWS", id: cellSel.id, delta: 1, after: row });
 					row = row + 1;
 				} else {
 					row = Math.min(rows - 1, row + 1);
@@ -1311,37 +1311,57 @@ export default function App() {
 		}
 	}
 
-	// paste event handler: extract PNG images from clipboard
+	// paste event handler: extract images from clipboard (files, screenshots, etc.)
 	useEffect(() => {
 		function onPaste(e: ClipboardEvent) {
 			const target = e.target as HTMLElement;
-			if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return; // allow normal paste in text inputs
+			const items = Array.from(e.clipboardData?.items ?? []);
 
-			const items = e.clipboardData?.items;
-			if (!items) return;
+			// Look for image in clipboard items. Check both file-kind and all items with image MIME.
+			// Different browsers/OS handle paste differently, so we try multiple strategies.
+			let imageBlob: Blob | null = null;
 
-			for (let i = 0; i < items.length; i++) {
-				const item = items[i];
-				if (item.type.startsWith("image/png") || item.type.startsWith("image/")) {
-					e.preventDefault();
-					const blob = item.getAsFile();
-					if (blob) {
-						const reader = new FileReader();
-						reader.onload = (ev) => {
-							if (typeof ev.target?.result === "string") {
-								setPendingImage(ev.target.result); // base64 data URL
-								setMode("image"); // switch to image placement mode
-							}
-						};
-						reader.readAsDataURL(blob);
-					}
-					break; // only process first image
+			// Strategy 1: Find items marked as files with image MIME type (most common)
+			for (const item of items) {
+				if (item.kind === "file" && item.type && item.type.startsWith("image/")) {
+					imageBlob = item.getAsFile();
+					break;
 				}
 			}
+
+			// Strategy 2: If no file found, check for any item with image MIME (some systems don't set kind=file)
+			if (!imageBlob) {
+				for (const item of items) {
+					if (item.type && item.type.startsWith("image/")) {
+						imageBlob = item.getAsFile();
+						break;
+					}
+				}
+			}
+
+			if (!imageBlob) {
+				// No image found: allow normal text paste in editors
+				if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+				return;
+			}
+
+			e.preventDefault();
+			const reader = new FileReader();
+			reader.onload = (ev) => {
+				if (typeof ev.target?.result === "string") {
+					setPendingImage(ev.target.result); // base64 data URL
+					setMode("image"); // switch to image placement mode
+				}
+			};
+			reader.readAsDataURL(imageBlob);
 		}
 
+		document.addEventListener("paste", onPaste, true);
 		window.addEventListener("paste", onPaste);
-		return () => window.removeEventListener("paste", onPaste);
+		return () => {
+			document.removeEventListener("paste", onPaste, true);
+			window.removeEventListener("paste", onPaste);
+		};
 	}, []);
 
 	// keyboard shortcuts (also usable via an on-screen keyboard)
@@ -2509,7 +2529,18 @@ export default function App() {
 							{selectedTable.checkCol != null ? "Rows / variables" : "Rows / Columns"}
 						</span>
 						<div className="btn-grid">
-							<button onClick={() => dispatch({ type: "TABLE_ROWS", id: selectedTable.id, delta: 1 })}>Row +</button>
+							<button
+								onClick={() =>
+									dispatch({
+										type: "TABLE_ROWS",
+										id: selectedTable.id,
+										delta: 1,
+										after: cellSel?.id === selectedTable.id ? cellSel.row : undefined,
+									})
+								}
+							>
+								Row +
+							</button>
 							<button onClick={() => dispatch({ type: "TABLE_ROWS", id: selectedTable.id, delta: -1 })}>Row −</button>
 							{selectedTable.checkCol != null ? (
 								<>
@@ -2518,7 +2549,16 @@ export default function App() {
 								</>
 							) : (
 								<>
-									<button onClick={() => dispatch({ type: "TABLE_COLS", id: selectedTable.id, delta: 1 })}>
+									<button
+										onClick={() =>
+											dispatch({
+												type: "TABLE_COLS",
+												id: selectedTable.id,
+												delta: 1,
+												after: cellSel?.id === selectedTable.id ? cellSel.col : undefined,
+											})
+										}
+									>
 										Col +
 									</button>
 									<button onClick={() => dispatch({ type: "TABLE_COLS", id: selectedTable.id, delta: -1 })}>

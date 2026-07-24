@@ -49,8 +49,8 @@ export type Action =
 	| { type: "DELETE_IMAGE"; id: string }
 	| { type: "ADD_TABLE"; table: DiagTable }
 	| { type: "SET_TABLE_CELL"; id: string; row: number; col: number; text: string }
-	| { type: "TABLE_ROWS"; id: string; delta: number }
-	| { type: "TABLE_COLS"; id: string; delta: number }
+	| { type: "TABLE_ROWS"; id: string; delta: number; after?: number }
+	| { type: "TABLE_COLS"; id: string; delta: number; after?: number }
 	| { type: "TABLE_WIDTH"; id: string; delta: number }
 	| { type: "QM_VARS"; id: string; delta: number }
 	| { type: "TOGGLE_STRIKE"; id: string; row: number; col: number }
@@ -351,6 +351,38 @@ function docReducer(doc: Doc, a: Action): Doc {
 				...doc,
 				tables: doc.tables.map((t) => {
 					if (t.id !== a.id) return t;
+					if (a.delta > 0 && a.after != null) {
+						const add = a.delta;
+						const insertAt = Math.max(0, Math.min(t.rows, a.after + 1));
+						const cells = t.cells.map((row) => row.slice());
+						for (let i = 0; i < add; i++) {
+							const row = Array(t.cols).fill("");
+							// QM combination tables: keep the bit columns prefilled with 0
+							if (t.checkCol != null) for (let c = 1; c <= t.cols - 3; c++) row[c] = "0";
+							cells.splice(insertAt + i, 0, row);
+						}
+						const shiftRows = (arr?: number[]) => arr?.map((n) => (n >= insertAt ? n + add : n));
+						const struck = (t.struck ?? []).map((k) => {
+							const [r, c] = k.split(":");
+							const rr = Number(r);
+							return `${rr >= insertAt ? rr + add : rr}:${c}`;
+						});
+						const loops = t.loops?.map((lp) => ({
+							...lp,
+							r1: lp.r1 >= insertAt ? lp.r1 + add : lp.r1,
+							r2: lp.r2 >= insertAt ? lp.r2 + add : lp.r2,
+						}));
+						return {
+							...t,
+							rows: t.rows + add,
+							cells,
+							struck,
+							boldRows: shiftRows(t.boldRows),
+							hlRows: shiftRows(t.hlRows),
+							loops,
+						};
+					}
+
 					const rows = Math.max(1, t.rows + a.delta);
 					const cells = t.cells.slice(0, rows);
 					while (cells.length < rows) {
@@ -367,6 +399,39 @@ function docReducer(doc: Doc, a: Action): Doc {
 				...doc,
 				tables: doc.tables.map((t) => {
 					if (t.id !== a.id) return t;
+					if (a.delta > 0 && a.after != null) {
+						const add = a.delta;
+						const insertAt = Math.max(0, Math.min(t.cols, a.after + 1));
+						const cells = t.cells.map((row) => {
+							const copy = row.slice();
+							for (let i = 0; i < add; i++) copy.splice(insertAt + i, 0, "");
+							return copy;
+						});
+						const shiftCols = (arr?: number[]) => arr?.map((n) => (n >= insertAt ? n + add : n));
+						const struck = (t.struck ?? []).map((k) => {
+							const [r, c] = k.split(":");
+							const cc = Number(c);
+							return `${r}:${cc >= insertAt ? cc + add : cc}`;
+						});
+						const loops = t.loops?.map((lp) => ({
+							...lp,
+							c1: lp.c1 >= insertAt ? lp.c1 + add : lp.c1,
+							c2: lp.c2 >= insertAt ? lp.c2 + add : lp.c2,
+						}));
+						const cols = t.cols + add;
+						const inputCols = t.inputCols ? Math.min(t.inputCols, cols) : t.inputCols;
+						return {
+							...t,
+							cols,
+							cells,
+							inputCols,
+							struck,
+							boldCols: shiftCols(t.boldCols),
+							hlCols: shiftCols(t.hlCols),
+							loops,
+						};
+					}
+
 					const cols = Math.max(1, t.cols + a.delta);
 					const cells = t.cells.map((row) => {
 						const r = row.slice(0, cols);
