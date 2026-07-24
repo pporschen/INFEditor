@@ -1314,50 +1314,77 @@ export default function App() {
 	// paste event handler: extract images from clipboard (files, screenshots, etc.)
 	useEffect(() => {
 		function onPaste(e: ClipboardEvent) {
-			const target = e.target as HTMLElement;
-			const items = Array.from(e.clipboardData?.items ?? []);
-
-			// Look for image in clipboard items. Check both file-kind and all items with image MIME.
-			// Different browsers/OS handle paste differently, so we try multiple strategies.
-			let imageBlob: Blob | null = null;
-
-			// Strategy 1: Find items marked as files with image MIME type (most common)
-			for (const item of items) {
-				if (item.kind === "file" && item.type && item.type.startsWith("image/")) {
-					imageBlob = item.getAsFile();
-					break;
+			try {
+				const target = e.target as HTMLElement;
+				const clipboardData = e.clipboardData;
+				
+				if (!clipboardData) {
+					console.log("[paste] No clipboard data available");
+					return;
 				}
-			}
 
-			// Strategy 2: If no file found, check for any item with image MIME (some systems don't set kind=file)
-			if (!imageBlob) {
+				const items = Array.from(clipboardData.items ?? []);
+				console.log("[paste] Clipboard items:", items.map(it => ({ kind: it.kind, type: it.type })));
+
+				// Only allow editor text paste if no image
+				const hasImage = items.some(it => it.type && it.type.startsWith("image/"));
+				if (!hasImage) {
+					if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
+						console.log("[paste] No image, delegating to editor");
+						return;
+					}
+					console.log("[paste] No image found in clipboard");
+					return;
+				}
+
+				// Extract first image blob (works with both file-kind and plain image items)
+				let imageBlob: Blob | null = null;
 				for (const item of items) {
 					if (item.type && item.type.startsWith("image/")) {
-						imageBlob = item.getAsFile();
-						break;
+						const blob = item.getAsFile();
+						if (blob && blob.size > 0) {
+							imageBlob = blob;
+							console.log("[paste] Found image blob:", { type: blob.type, size: blob.size });
+							break;
+						}
 					}
 				}
-			}
 
-			if (!imageBlob) {
-				// No image found: allow normal text paste in editors
-				if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
-				return;
-			}
-
-			e.preventDefault();
-			const reader = new FileReader();
-			reader.onload = (ev) => {
-				if (typeof ev.target?.result === "string") {
-					setPendingImage(ev.target.result); // base64 data URL
-					setMode("image"); // switch to image placement mode
+				if (!imageBlob) {
+					console.log("[paste] Failed to extract image blob");
+					return;
 				}
-			};
-			reader.readAsDataURL(imageBlob);
+
+				e.preventDefault();
+				console.log("[paste] Starting FileReader...");
+
+				const reader = new FileReader();
+				
+				reader.onerror = () => {
+					console.error("[paste] FileReader error:", reader.error);
+				};
+
+				reader.onload = (ev) => {
+					const result = ev.target?.result;
+					if (typeof result === "string") {
+						console.log("[paste] FileReader success, setting pending image and switching to image mode");
+						setPendingImage(result);
+						setMode("image");
+					} else {
+						console.error("[paste] FileReader result was not a string:", typeof result);
+					}
+				};
+
+				reader.readAsDataURL(imageBlob);
+			} catch (err) {
+				console.error("[paste] Exception:", err);
+			}
 		}
 
-		document.addEventListener("paste", onPaste, true);
-		window.addEventListener("paste", onPaste);
+		console.log("[paste] Registering paste handlers");
+		document.addEventListener("paste", onPaste, true); // capture phase
+		window.addEventListener("paste", onPaste); // bubble phase
+		
 		return () => {
 			document.removeEventListener("paste", onPaste, true);
 			window.removeEventListener("paste", onPaste);
