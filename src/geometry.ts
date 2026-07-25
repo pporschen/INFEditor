@@ -56,6 +56,12 @@ export function anchor(n: DiagNode, tx: number, ty: number): Pt {
     const s = 1 / Math.sqrt((dx / hw) ** 2 + (dy / hh) ** 2)
     return { x: c.x + dx * s, y: c.y + dy * s }
   }
+  if (n.shape === 'diamond') {
+    // rhombus boundary: |x|/hw + |y|/hh = 1
+    const denom = Math.abs(dx) / hw + Math.abs(dy) / hh || 1
+    const s = 1 / denom
+    return { x: c.x + dx * s, y: c.y + dy * s }
+  }
   // box: scale the direction vector until it hits a rectangle edge
   const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity
   const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity
@@ -72,3 +78,4 @@ export function topAnchor(n: DiagNode): Pt {
 export function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v))
 }
+

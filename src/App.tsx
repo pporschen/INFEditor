@@ -555,7 +555,7 @@ export default function App() {
 				dispatch({ type: "ADD_DOT", id: crypto.randomUUID(), x: gx, y: gy });
 				return;
 			}
-			// States and boxes are drawn from two opposite corners.
+			// States, boxes, and decision diamonds are drawn from two opposite corners.
 			if (pendingCorner === null) {
 				setPendingCorner({ x: gx, y: gy }); // first corner
 				setHoverCell({ x: gx, y: gy });
@@ -1530,6 +1530,16 @@ export default function App() {
 								▭ Box
 							</button>
 							<button
+								className={shape === "diamond" ? "active" : ""}
+								onClick={() => {
+									setShape("diamond");
+									setPendingCorner(null);
+									setHoverCell(null);
+								}}
+							>
+								◇ Decision
+							</button>
+							<button
 								className={shape === "dot" ? "active" : ""}
 								onClick={() => {
 									setShape("dot");
@@ -1734,8 +1744,8 @@ export default function App() {
 					{mode === "node" &&
 						shape !== "dot" &&
 						(pendingCorner
-							? `Now dwell on the opposite corner to finish the ${shape === "circle" ? "state" : "box"}.`
-							: `Dwell on the first corner of the ${shape === "circle" ? "state" : "box"}.`)}
+							? `Now dwell on the opposite corner to finish the ${shape === "circle" ? "state" : shape === "diamond" ? "decision" : "box"}.`
+							: `Dwell on the first corner of the ${shape === "circle" ? "state" : shape === "diamond" ? "decision" : "box"}.`)}
 					{mode === "edge" &&
 						(pendingFrom ? "Now dwell on the target node (same node = self-loop)." : "Dwell on the source node.")}
 					{mode === "line" &&
@@ -1932,7 +1942,7 @@ export default function App() {
 									type="button"
 									className="expand-field-btn"
 									onClick={() =>
-										openExpandedEditor("Node label", selectedNode.label, false, (value) =>
+										openExpandedEditor("Node label", selectedNode.label, selectedNode.shape === "box", (value) =>
 											dispatch({ type: "SET_NODE_LABEL", id: selectedNode.id, label: value }),
 										)
 									}

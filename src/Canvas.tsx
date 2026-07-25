@@ -177,8 +177,8 @@ export function renderRich(s: string): ReactNode {
 	return out;
 }
 
-// Render text that may contain `\\` line breaks (like LaTeX) as stacked lines,
-// anchored at x. Single-line text renders inline as before.
+// Render text that may contain `\\` (LaTeX-style) or real newlines as stacked
+// lines, anchored at x. Single-line text renders inline as before.
 type LineClick = (e: React.MouseEvent<SVGTSpanElement>, lineIndex: number, srcOffset: number, rawLine: string) => void;
 
 export function renderLines(
@@ -186,21 +186,39 @@ export function renderLines(
 	x: number,
 	lineHeight: number | string = "1.6em",
 	onLineClick?: LineClick,
+	centerBlock = false,
 ): ReactNode {
-	const lines = s.split(/\\\\/);
-	if (lines.length === 1 && !onLineClick) return renderRich(s);
-	// source offset of each line (each `\\` separator is 2 chars)
+	const sep = /(\\\\|\r?\n)/g;
+	const lines: string[] = [];
 	const offsets: number[] = [];
-	let acc = 0;
-	for (const ln of lines) {
-		offsets.push(acc);
-		acc += ln.length + 2;
+	let last = 0;
+	let m: RegExpExecArray | null;
+	while ((m = sep.exec(s)) !== null) {
+		offsets.push(last);
+		lines.push(s.slice(last, m.index));
+		last = m.index + m[0].length;
+	}
+	offsets.push(last);
+	lines.push(s.slice(last));
+	if (lines.length === 1 && !onLineClick) return renderRich(s);
+	let firstDy: number | string = 0;
+	if (centerBlock && lines.length > 1) {
+		if (typeof lineHeight === "number") {
+			firstDy = -((lines.length - 1) * lineHeight) / 2;
+		} else {
+			const mm = /^(-?\d*\.?\d+)([a-z%]*)$/i.exec(lineHeight.trim());
+			if (mm) {
+				const v = Number(mm[1]);
+				const u = mm[2] || "";
+				firstDy = `${-((lines.length - 1) * v) / 2}${u}`;
+			}
+		}
 	}
 	return lines.map((ln, i) => (
 		<tspan
 			key={i}
 			x={x}
-			dy={i === 0 ? 0 : lineHeight}
+			dy={i === 0 ? firstDy : lineHeight}
 			onClick={onLineClick ? (e) => onLineClick(e, i, offsets[i], ln) : undefined}
 		>
 			{renderRich(ln.trim())}
@@ -693,6 +711,11 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 											<ellipse cx={c.x} cy={c.y} rx={hw - 5} ry={hh - 5} className="node-inner" fill="none" />
 										)}
 									</>
+								) : n.shape === "diamond" ? (
+									<polygon
+										points={`${c.x},${c.y - hh} ${c.x + hw},${c.y} ${c.x},${c.y + hh} ${c.x - hw},${c.y}`}
+										className="node-fill"
+									/>
 								) : (
 									<rect x={c.x - hw} y={c.y - hh} width={hw * 2} height={hh * 2} rx={4} className="node-fill" />
 								)}
@@ -722,7 +745,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 									</>
 								) : (
 									<text x={c.x} y={c.y} className="node-label">
-										{renderLines(n.label, c.x)}
+										{renderLines(n.label, c.x, "1.6em", undefined, true)}
 									</text>
 								)}
 							</g>
@@ -1231,6 +1254,11 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 								cy={((pendingCorner.y + hoverCell.y) / 2) * GRID}
 								rx={(Math.abs(hoverCell.x - pendingCorner.x) * GRID) / 2}
 								ry={(Math.abs(hoverCell.y - pendingCorner.y) * GRID) / 2}
+								className="preview-box"
+							/>
+						) : drawShape === "diamond" ? (
+							<polygon
+								points={`${((pendingCorner.x + hoverCell.x) / 2) * GRID},${Math.min(pendingCorner.y, hoverCell.y) * GRID} ${Math.max(pendingCorner.x, hoverCell.x) * GRID},${((pendingCorner.y + hoverCell.y) / 2) * GRID} ${((pendingCorner.x + hoverCell.x) / 2) * GRID},${Math.max(pendingCorner.y, hoverCell.y) * GRID} ${Math.min(pendingCorner.x, hoverCell.x) * GRID},${((pendingCorner.y + hoverCell.y) / 2) * GRID}`}
 								className="preview-box"
 							/>
 						) : (

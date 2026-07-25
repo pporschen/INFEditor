@@ -1,4 +1,4 @@
-export type Shape = "circle" | "box" | "dot";
+export type Shape = "circle" | "box" | "diamond" | "dot";
 
 export type GateType = "and" | "nand" | "or" | "nor" | "xor" | "xnor" | "not" | "buffer";
 
@@ -10,8 +10,8 @@ export interface DiagNode {
 	shape: Shape;
 	accepting: boolean; // double-circle for automata accepting states
 	start: boolean; // draw an incoming "start" arrow
-	w?: number; // box width in grid cells (boxes only)
-	h?: number; // box height in grid cells (boxes only)
+	w?: number; // shape width in grid cells (circle/box/diamond)
+	h?: number; // shape height in grid cells (circle/box/diamond)
 	gate?: GateType; // boxes only: render as an IEC logic-gate symbol
 	hollow?: boolean; // dots only: draw outlined instead of filled
 }
