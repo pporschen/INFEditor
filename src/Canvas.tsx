@@ -43,44 +43,22 @@ const UMLAUT: Record<string, string> = {
 	y: "ÿ",
 };
 
-const OVERBAR = "̅"; // combining overline — draws a bar over the preceding glyph
+const OVERBAR = "̅"; // combining overline for per-symbol \bar rendering
 
 // Two KV group loops overlap if their cell rectangles share any cell.
 function loopsOverlap(a: TableLoop, b: TableLoop): boolean {
 	return !(a.r2 < b.r1 || a.r1 > b.r2 || a.c2 < b.c1 || a.c1 > b.c2);
 }
 
-function opsToUnicode(s: string): string {
-	return s
-		.replace(/\\left\.?/g, "")
-		.replace(/\\right\.?/g, "")
-		.replace(/\\cdot/g, "·")
-		.replace(/\\oplus/g, "⊕")
-		.replace(/\\lnot/g, "¬")
-		.replace(/\\neg/g, "¬")
-		.replace(/\\lor/g, "∨")
-		.replace(/\\vee/g, "∨")
-		.replace(/\\land/g, "∧")
-		.replace(/\\wedge/g, "∧")
-		.replace(/\\neq/g, "≠")
-		.replace(/\\ss/g, "ß")
-		.replace(/\\"\{?([a-zA-Z])\}?/g, (_, c) => UMLAUT[c] ?? c + "̈");
-}
-
-// Render a negated group as combining overlines — reliable in every browser
-// and in the PNG export, unlike text-decoration on a <tspan>.
+// Per-symbol overline used for \bar so adjacent/nested individual bars remain visible.
 function overlineString(inner: string): string {
-	const flat = opsToUnicode(inner.replace(/\\(?:overline|bar)\{([^{}]*)\}/g, (_, g) => overlineString(g))).replace(
-		/[{}]/g,
-		"",
-	);
-	return Array.from(flat)
+	return Array.from(inner.replace(/[{}]/g, ""))
 		.map((c) => (c === OVERBAR ? c : c + OVERBAR))
 		.join("");
 }
-
 // Render a small LaTeX subset: sub/superscript, \overline / \bar negation
-// bars, and boolean operators. Braces group (and are invisible).
+// bars, basic text formatting commands, and boolean operators. Braces group
+// (and are invisible).
 export function renderRich(s: string): ReactNode {
 	const out: ReactNode[] = [];
 	let buf = "";
@@ -122,7 +100,7 @@ export function renderRich(s: string): ReactNode {
 				continue;
 			}
 			const m =
-				/^\\(overline|bar|cdot|oplus|lnot|neg|lor|vee|land|wedge|left|right|Rightarrow|implies|Leftrightarrow|iff|neq|ss)/.exec(
+				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|left|right|Rightarrow|implies|Leftrightarrow|iff|neq|ss)/.exec(
 					s.slice(i),
 				);
 			if (m) {
@@ -130,17 +108,29 @@ export function renderRich(s: string): ReactNode {
 				i += m[0].length;
 				if (cmd === "overline" || cmd === "bar") {
 					const inner = readArg();
-					if (/[_^]/.test(inner)) {
-						// sub/superscript inside a bar: fall back to text-decoration
+					if (cmd === "bar") {
+						buf += overlineString(inner);
+					} else {
 						flush();
+						// Group overline so a whole term gets one continuous bar.
 						out.push(
-							<tspan key={key++} style={{ textDecoration: "overline" }}>
+							<tspan key={key++} style={{ textDecorationLine: "overline", textDecorationSkipInk: "none" }}>
 								{renderRich(inner)}
 							</tspan>,
 						);
-					} else {
-						buf += overlineString(inner);
 					}
+				} else if (cmd === "textbf" || cmd === "textit" || cmd === "emph" || cmd === "underline") {
+					const inner = readArg();
+					flush();
+					const style: CSSProperties = {};
+					if (cmd === "textbf") style.fontWeight = 700;
+					if (cmd === "textit" || cmd === "emph") style.fontStyle = "italic";
+					if (cmd === "underline") style.textDecorationLine = "underline";
+					out.push(
+						<tspan key={key++} style={style}>
+							{renderRich(inner)}
+						</tspan>,
+					);
 				} else if (cmd === "left" || cmd === "right") {
 					// delimiter sizing hint — keep the bracket, drop an invisible '.'
 					if (s[i] === ".") i++;
@@ -233,15 +223,15 @@ function renderTextLineWithMath(s: string): ReactNode {
 	while (start < s.length) {
 		const open = s.indexOf("$", start);
 		if (open < 0) {
-			if (start < s.length) out.push(s.slice(start));
+			if (start < s.length) out.push(<Fragment key={key++}>{renderRich(s.slice(start))}</Fragment>);
 			break;
 		}
 		const close = s.indexOf("$", open + 1);
 		if (close < 0) {
-			out.push(s.slice(start));
+			out.push(<Fragment key={key++}>{renderRich(s.slice(start))}</Fragment>);
 			break;
 		}
-		if (open > start) out.push(s.slice(start, open));
+		if (open > start) out.push(<Fragment key={key++}>{renderRich(s.slice(start, open))}</Fragment>);
 		out.push(<Fragment key={key++}>{renderRich(s.slice(open + 1, close))}</Fragment>);
 		start = close + 1;
 	}
@@ -1031,7 +1021,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 											/>
 											{i > 0 && (
 												<text x={relX} y={cy} className="deriv-rel">
-													{renderRich(st.rel || "=")}
+													{renderRich(st.rel ?? "=")}
 												</text>
 											)}
 											<text
