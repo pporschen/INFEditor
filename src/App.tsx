@@ -501,11 +501,21 @@ export default function App() {
 	// Save the whole document to a .json file the user can reopen later to keep
 	// editing (distinct from PNG/LaTeX export, which is final output).
 	function saveFile() {
+		const suggested = doc.name ? `${doc.name}.infedit.json` : "diagram.infedit.json";
+		const name = window.prompt("Save diagram as:", suggested);
+		if (!name) return; // cancelled
+		const clean = name.replace(/[\\/:*?"<>|]+/g, "_").trim() || "diagram.infedit.json";
+		const filename = clean.toLowerCase().endsWith(".infedit.json") ? clean : `${clean}.infedit.json`;
+		// persist the chosen filename (without extension) as the diagram's name
+		if (!doc.name || !filename.toLowerCase().startsWith(doc.name.toLowerCase())) {
+			const baseName = filename.replace(/\.infedit\.json$/i, "");
+			if (baseName && baseName !== "diagram") dispatch({ type: "SET_DOC_NAME", name: baseName });
+		}
 		const blob = new Blob([JSON.stringify(doc)], { type: "application/json" });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement("a");
 		a.href = url;
-		a.download = "diagram.infedit.json";
+		a.download = filename;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
@@ -555,7 +565,7 @@ export default function App() {
 				dispatch({ type: "ADD_DOT", id: crypto.randomUUID(), x: gx, y: gy });
 				return;
 			}
-			// States, boxes, and decision diamonds are drawn from two opposite corners.
+			// States, boxes, ASM boxes, and decision diamonds are drawn from two opposite corners.
 			if (pendingCorner === null) {
 				setPendingCorner({ x: gx, y: gy }); // first corner
 				setHoverCell({ x: gx, y: gy });
@@ -1266,7 +1276,7 @@ export default function App() {
 						row = (row - 1 + rows) % rows;
 					}
 				} else if (growable && col === cols - 1) {
-					// at the last column: append a new column and step into it
+					// free-form tables only grow when Tab is pressed at the right edge
 					dispatch({ type: "TABLE_COLS", id: cellSel.id, delta: 1, after: col });
 					col = col + 1;
 				} else {
@@ -1279,7 +1289,7 @@ export default function App() {
 				break;
 			case "Enter":
 				e.preventDefault();
-				// at the last row of a free-form table: append a row and step into it
+				// free-form tables only grow when Enter is pressed at the bottom edge
 				if (growable && row === rows - 1) {
 					dispatch({ type: "TABLE_ROWS", id: cellSel.id, delta: 1, after: row });
 					row = row + 1;
@@ -1530,6 +1540,16 @@ export default function App() {
 								▭ Box
 							</button>
 							<button
+								className={shape === "asm" ? "active" : ""}
+								onClick={() => {
+									setShape("asm");
+									setPendingCorner(null);
+									setHoverCell(null);
+								}}
+							>
+								⬭ ASM box
+							</button>
+							<button
 								className={shape === "diamond" ? "active" : ""}
 								onClick={() => {
 									setShape("diamond");
@@ -1744,8 +1764,8 @@ export default function App() {
 					{mode === "node" &&
 						shape !== "dot" &&
 						(pendingCorner
-							? `Now dwell on the opposite corner to finish the ${shape === "circle" ? "state" : shape === "diamond" ? "decision" : "box"}.`
-							: `Dwell on the first corner of the ${shape === "circle" ? "state" : shape === "diamond" ? "decision" : "box"}.`)}
+							? `Now dwell on the opposite corner to finish the ${shape === "circle" ? "state" : shape === "diamond" ? "decision" : shape === "asm" ? "ASM box" : "box"}.`
+							: `Dwell on the first corner of the ${shape === "circle" ? "state" : shape === "diamond" ? "decision" : shape === "asm" ? "ASM box" : "box"}.`)}
 					{mode === "edge" &&
 						(pendingFrom ? "Now dwell on the target node (same node = self-loop)." : "Dwell on the source node.")}
 					{mode === "line" &&
@@ -1942,8 +1962,11 @@ export default function App() {
 									type="button"
 									className="expand-field-btn"
 									onClick={() =>
-										openExpandedEditor("Node label", selectedNode.label, selectedNode.shape === "box", (value) =>
-											dispatch({ type: "SET_NODE_LABEL", id: selectedNode.id, label: value }),
+										openExpandedEditor(
+											"Node label",
+											selectedNode.label,
+											selectedNode.shape === "box" || selectedNode.shape === "asm",
+											(value) => dispatch({ type: "SET_NODE_LABEL", id: selectedNode.id, label: value }),
 										)
 									}
 								>
@@ -1951,21 +1974,21 @@ export default function App() {
 								</button>
 							</label>
 						)}
+						<span className="group-title">Move (1/4 cell)</span>
+						<div className="dpad">
+							<span />
+							<button onClick={() => nudgeNode(0, -LINE_STEP)}>↑</button>
+							<span />
+							<button onClick={() => nudgeNode(-LINE_STEP, 0)}>←</button>
+							<span />
+							<button onClick={() => nudgeNode(LINE_STEP, 0)}>→</button>
+							<span />
+							<button onClick={() => nudgeNode(0, LINE_STEP)}>↓</button>
+							<span />
+						</div>
+						<p className="muted">Or dwell an empty cell to move it.</p>
 						{selectedNode.shape === "dot" && (
 							<>
-								<span className="group-title">Move (1/4 cell)</span>
-								<div className="dpad">
-									<span />
-									<button onClick={() => nudgeNode(0, -LINE_STEP)}>↑</button>
-									<span />
-									<button onClick={() => nudgeNode(-LINE_STEP, 0)}>←</button>
-									<span />
-									<button onClick={() => nudgeNode(LINE_STEP, 0)}>→</button>
-									<span />
-									<button onClick={() => nudgeNode(0, LINE_STEP)}>↓</button>
-									<span />
-								</div>
-								<p className="muted">Or dwell an empty cell to move it.</p>
 								<span className="group-title">Style</span>
 								<button
 									className={selectedNode.hollow ? "active" : ""}
@@ -2862,42 +2885,40 @@ export default function App() {
 								Expand
 							</button>
 						</label>
-						{derivStep > 0 && (
-							<label>
-								Reason
-								<input
-									value={selectedDeriv.steps[derivStep].reason}
-									onFocus={() => setDerivField("reason")}
-									onChange={(e) =>
+						<label>
+							Reason
+							<input
+								value={selectedDeriv.steps[derivStep].reason}
+								onFocus={() => setDerivField("reason")}
+								onChange={(e) =>
+									dispatch({
+										type: "SET_DERIV",
+										id: selectedDeriv.id,
+										index: derivStep,
+										field: "reason",
+										value: e.target.value,
+									})
+								}
+								onKeyDown={handleDerivKey}
+							/>
+							<button
+								type="button"
+								className="expand-field-btn"
+								onClick={() =>
+									openExpandedEditor("Derivation reason", selectedDeriv.steps[derivStep].reason, false, (value) =>
 										dispatch({
 											type: "SET_DERIV",
 											id: selectedDeriv.id,
 											index: derivStep,
 											field: "reason",
-											value: e.target.value,
-										})
-									}
-									onKeyDown={handleDerivKey}
-								/>
-								<button
-									type="button"
-									className="expand-field-btn"
-									onClick={() =>
-										openExpandedEditor("Derivation reason", selectedDeriv.steps[derivStep].reason, false, (value) =>
-											dispatch({
-												type: "SET_DERIV",
-												id: selectedDeriv.id,
-												index: derivStep,
-												field: "reason",
-												value,
-											}),
-										)
-									}
-								>
-									Expand
-								</button>
-							</label>
-						)}
+											value,
+										}),
+									)
+								}
+							>
+								Expand
+							</button>
+						</label>
 						<div className="btn-grid">
 							<button onClick={addStep}>Add line ⏎</button>
 							<button
@@ -2950,6 +2971,13 @@ export default function App() {
 								title="Implies  \Rightarrow"
 							>
 								⇒ Impl
+							</button>
+							<button
+								onMouseDown={(e) => e.preventDefault()}
+								onClick={() => insertText("\\leftarrow ")}
+								title="RTL assign  \leftarrow"
+							>
+								← RTL
 							</button>
 							<button onMouseDown={(e) => e.preventDefault()} onClick={() => insertText("(")} title="Open paren">
 								(

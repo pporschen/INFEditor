@@ -78,6 +78,7 @@ export type Action =
 	| { type: "MOVE_MANY"; refs: { kind: string; id: string }[]; dx: number; dy: number }
 	| { type: "DELETE_DERIV"; id: string }
 	| { type: "SET_PAGES"; count: number }
+	| { type: "SET_DOC_NAME"; name: string }
 	| { type: "SET_NODE_LABEL"; id: string; label: string }
 	| { type: "SET_EDGE_LABEL"; id: string; label: string }
 	| { type: "SET_EDGE_CURVE"; id: string; curve: number }
@@ -708,13 +709,17 @@ function docReducer(doc: Doc, a: Action): Doc {
 			return { ...doc, derivations: doc.derivations.filter((d) => d.id !== a.id) };
 		case "SET_PAGES":
 			return { ...doc, pages: Math.max(1, a.count) };
+		case "SET_DOC_NAME":
+			return { ...doc, name: a.name };
 		case "CLEAR":
 			return {
 				...doc,
+				pages: 1,
 				nodes: [],
 				edges: [],
 				lines: [],
 				texts: [],
+				images: [],
 				tables: [],
 				derivations: [],
 			};

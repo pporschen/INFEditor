@@ -21,6 +21,8 @@ const OP: Record<string, string> = {
 	vee: "∨",
 	land: "∧",
 	wedge: "∧",
+	leftarrow: "←",
+	Leftarrow: "⇐",
 	Rightarrow: "⇒",
 	implies: "⇒",
 	Leftrightarrow: "⇔",
@@ -100,7 +102,7 @@ export function renderRich(s: string): ReactNode {
 				continue;
 			}
 			const m =
-				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|left|right|Rightarrow|implies|Leftrightarrow|iff|neq|ss)/.exec(
+				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|Leftrightarrow|implies|iff|left|right|neq|ss)/.exec(
 					s.slice(i),
 				);
 			if (m) {
@@ -354,14 +356,14 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 		return { xs, ys };
 	};
 	const major = gridLines(GRID);
-	const selDot = selection?.kind === "node" && nodeById.get(selection.id)?.shape === "dot";
+	const selNode = selection?.kind === "node";
 	const showSubGrid =
 		mode === "line" ||
 		mode === "text" ||
 		(mode === "node" && drawShape === "dot") ||
 		selection?.kind === "line" ||
 		selection?.kind === "text" ||
-		selDot;
+		selNode;
 
 	function toCell(e: React.MouseEvent<SVGRectElement>): { gx: number; gy: number } | null {
 		const svg = (e.currentTarget.ownerSVGElement ?? null) as SVGSVGElement | null;
@@ -471,7 +473,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 				onMouseMove={handleBgMove}
 			/>
 
-			{/* fine 1/4 sub-grid: shown while drawing wires or adjusting a selected one */}
+			{/* fine 1/4 sub-grid: shown while drawing wires, adjusting a selected one, or moving a selected node */}
 			{showSubGrid && (
 				<g pointerEvents="none">
 					{gridLines(GRID / 4).xs.map((x, i) =>
@@ -701,6 +703,8 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 											<ellipse cx={c.x} cy={c.y} rx={hw - 5} ry={hh - 5} className="node-inner" fill="none" />
 										)}
 									</>
+								) : n.shape === "asm" ? (
+									<rect x={c.x - hw} y={c.y - hh} width={hw * 2} height={hh * 2} rx={hh} className="node-fill" />
 								) : n.shape === "diamond" ? (
 									<polygon
 										points={`${c.x},${c.y - hh} ${c.x + hw},${c.y} ${c.x},${c.y + hh} ${c.x - hw},${c.y}`}
@@ -1052,7 +1056,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 														: undefined,
 												)}
 											</text>
-											{i > 0 && st.reason && (
+											{st.reason && (
 												<text x={reasonX} y={cy} className="deriv-reason">
 													{renderRich(`(${st.reason})`)}
 												</text>
@@ -1244,6 +1248,15 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 								cy={((pendingCorner.y + hoverCell.y) / 2) * GRID}
 								rx={(Math.abs(hoverCell.x - pendingCorner.x) * GRID) / 2}
 								ry={(Math.abs(hoverCell.y - pendingCorner.y) * GRID) / 2}
+								className="preview-box"
+							/>
+						) : drawShape === "asm" ? (
+							<rect
+								x={Math.min(pendingCorner.x, hoverCell.x) * GRID}
+								y={Math.min(pendingCorner.y, hoverCell.y) * GRID}
+								width={Math.abs(hoverCell.x - pendingCorner.x) * GRID}
+								height={Math.abs(hoverCell.y - pendingCorner.y) * GRID}
+								rx={(Math.abs(hoverCell.y - pendingCorner.y) * GRID) / 2}
 								className="preview-box"
 							/>
 						) : drawShape === "diamond" ? (

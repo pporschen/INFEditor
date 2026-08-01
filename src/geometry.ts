@@ -1,81 +1,93 @@
-import type { DiagNode } from './types'
+import type { DiagNode } from "./types";
 
 // Pixel size of one grid cell. Large cells = large dwell targets for gaze.
-export const GRID = 48
-export const COLS = 24
-export const ROWS = 16
-export const W = COLS * GRID
-export const H = ROWS * GRID
+export const GRID = 48;
+export const COLS = 24;
+export const ROWS = 16;
+export const W = COLS * GRID;
+export const H = ROWS * GRID;
 
 // A4 portrait page, calibrated so 21 cells = 210 mm (i.e. 1 cell = 1 cm).
-export const PAGE_W = 21 * GRID // 210 mm
-export const PAGE_H = 29.7 * GRID // 297 mm
-export const PAGE_MARGIN = 2 * GRID // 20 mm printable margin guide
-export const PAGE_GAP = Math.round(0.6 * GRID) // visual gap between stacked pages
+export const PAGE_W = 21 * GRID; // 210 mm
+export const PAGE_H = 29.7 * GRID; // 297 mm
+export const PAGE_MARGIN = 2 * GRID; // 20 mm printable margin guide
+export const PAGE_GAP = Math.round(0.6 * GRID); // visual gap between stacked pages
 export function pageTop(i: number): number {
-  return i * (PAGE_H + PAGE_GAP)
+	return i * (PAGE_H + PAGE_GAP);
 }
 
-export const R = 20 // circle node radius
-export const BW = 76 // box width
-export const BH = 44 // box height
-export const DOT_R = 5 // junction dot radius (matches the gate negation bubble)
+export const R = 20; // circle node radius
+export const BW = 76; // box width
+export const BH = 44; // box height
+export const DOT_R = 5; // junction dot radius (matches the gate negation bubble)
 
 export interface Pt {
-  x: number
-  y: number
+	x: number;
+	y: number;
 }
 
 export function center(n: DiagNode): Pt {
-  return { x: n.x * GRID, y: n.y * GRID }
+	return { x: n.x * GRID, y: n.y * GRID };
 }
 
 // Half-extents (in pixels) of a node's bounding box. Sized shapes carry w/h in
 // grid cells; legacy nodes fall back to their old fixed size.
 export function halfExtents(n: DiagNode): { hw: number; hh: number } {
-  if (n.shape === 'dot') return { hw: DOT_R, hh: DOT_R }
-  if (n.w != null && n.h != null) {
-    return { hw: (n.w * GRID) / 2, hh: (n.h * GRID) / 2 }
-  }
-  return n.shape === 'circle' ? { hw: R, hh: R } : { hw: BW / 2, hh: BH / 2 }
+	if (n.shape === "dot") return { hw: DOT_R, hh: DOT_R };
+	if (n.w != null && n.h != null) {
+		return { hw: (n.w * GRID) / 2, hh: (n.h * GRID) / 2 };
+	}
+	return n.shape === "circle" ? { hw: R, hh: R } : { hw: BW / 2, hh: BH / 2 };
 }
 
 // Point on the node boundary in the direction of (tx, ty), so edges touch the
 // outline rather than the center.
 export function anchor(n: DiagNode, tx: number, ty: number): Pt {
-  const c = center(n)
-  let dx = tx - c.x
-  let dy = ty - c.y
-  const len = Math.hypot(dx, dy) || 1
-  dx /= len
-  dy /= len
+	const c = center(n);
+	let dx = tx - c.x;
+	let dy = ty - c.y;
+	const len = Math.hypot(dx, dy) || 1;
+	dx /= len;
+	dy /= len;
 
-  const { hw, hh } = halfExtents(n)
-  if (n.shape === 'circle' || n.shape === 'dot') {
-    // point where the ray leaves the ellipse
-    const s = 1 / Math.sqrt((dx / hw) ** 2 + (dy / hh) ** 2)
-    return { x: c.x + dx * s, y: c.y + dy * s }
-  }
-  if (n.shape === 'diamond') {
-    // rhombus boundary: |x|/hw + |y|/hh = 1
-    const denom = Math.abs(dx) / hw + Math.abs(dy) / hh || 1
-    const s = 1 / denom
-    return { x: c.x + dx * s, y: c.y + dy * s }
-  }
-  // box: scale the direction vector until it hits a rectangle edge
-  const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity
-  const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity
-  const s = Math.min(sx, sy)
-  return { x: c.x + dx * s, y: c.y + dy * s }
+	const { hw, hh } = halfExtents(n);
+	if (n.shape === "circle" || n.shape === "dot") {
+		// point where the ray leaves the ellipse
+		const s = 1 / Math.sqrt((dx / hw) ** 2 + (dy / hh) ** 2);
+		return { x: c.x + dx * s, y: c.y + dy * s };
+	}
+	if (n.shape === "diamond") {
+		// rhombus boundary: |x|/hw + |y|/hh = 1
+		const denom = Math.abs(dx) / hw + Math.abs(dy) / hh || 1;
+		const s = 1 / denom;
+		return { x: c.x + dx * s, y: c.y + dy * s };
+	}
+	if (n.shape === "asm") {
+		// horizontal capsule: central rectangle with a semicircle on each side
+		const r = hh;
+		const a = Math.max(0, hw - r);
+		if (Math.abs(dy) > 1e-6) {
+			const tFlat = hh / Math.abs(dy);
+			const xFlat = Math.abs(dx) * tFlat;
+			if (xFlat <= a) return { x: c.x + dx * tFlat, y: c.y + dy * tFlat };
+		}
+		const disc = Math.max(0, r * r - a * a * dy * dy);
+		const t = a * Math.abs(dx) + Math.sqrt(disc);
+		return { x: c.x + dx * t, y: c.y + dy * t };
+	}
+	// box: scale the direction vector until it hits a rectangle edge
+	const sx = dx !== 0 ? hw / Math.abs(dx) : Infinity;
+	const sy = dy !== 0 ? hh / Math.abs(dy) : Infinity;
+	const s = Math.min(sx, sy);
+	return { x: c.x + dx * s, y: c.y + dy * s };
 }
 
 // Topmost boundary point — used to anchor self-loops.
 export function topAnchor(n: DiagNode): Pt {
-  const c = center(n)
-  return { x: c.x, y: c.y - halfExtents(n).hh }
+	const c = center(n);
+	return { x: c.x, y: c.y - halfExtents(n).hh };
 }
 
 export function clamp(v: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, v))
+	return Math.max(lo, Math.min(hi, v));
 }
-

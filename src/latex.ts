@@ -29,12 +29,9 @@ export function derivToLatex(d: DiagDerivation): string {
 		if (rel.trim() === "") return "\\phantom{=}";
 		return rel;
 	};
-	if (s.length === 1) {
-		return `\\begin{align*}\n  ${s[0].expr}\n\\end{align*}`;
-	}
 	let out = "\\begin{align*}\n";
-	out += `  ${s[0].expr} &${relPart(s[1].rel)} ${s[1].expr}${reasonPart(s[1].reason)}`;
-	for (let i = 2; i < s.length; i++) {
+	out += `  ${s[0].expr}${reasonPart(s[0].reason)}`;
+	for (let i = 1; i < s.length; i++) {
 		out += ` \\\\\n  &${relPart(s[i].rel)} ${s[i].expr}${reasonPart(s[i].reason)}`;
 	}
 	out += "\n\\end{align*}";

@@ -1,4 +1,4 @@
-export type Shape = "circle" | "box" | "diamond" | "dot";
+export type Shape = "circle" | "box" | "asm" | "diamond" | "dot";
 
 export type GateType = "and" | "nand" | "or" | "nor" | "xor" | "xnor" | "not" | "buffer";
 
@@ -10,8 +10,8 @@ export interface DiagNode {
 	shape: Shape;
 	accepting: boolean; // double-circle for automata accepting states
 	start: boolean; // draw an incoming "start" arrow
-	w?: number; // shape width in grid cells (circle/box/diamond)
-	h?: number; // shape height in grid cells (circle/box/diamond)
+	w?: number; // shape width in grid cells (circle/box/asm/diamond)
+	h?: number; // shape height in grid cells (circle/box/asm/diamond)
 	gate?: GateType; // boxes only: render as an IEC logic-gate symbol
 	hollow?: boolean; // dots only: draw outlined instead of filled
 }
@@ -142,6 +142,7 @@ export interface Doc {
 	tables: DiagTable[];
 	derivations: DiagDerivation[];
 	pages: number; // number of stacked A4 pages
+	name?: string; // optional user-given diagram name, used as the default save filename
 }
 
 export type DerivField = "rel" | "expr" | "reason";
