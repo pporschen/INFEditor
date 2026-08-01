@@ -102,6 +102,9 @@ export interface DiagTable {
 	boldRows?: number[]; // rows with a bold separator drawn on their bottom edge
 	hlCols?: number[]; // columns tinted for visibility
 	hlRows?: number[]; // rows tinted for visibility
+	cellColors?: Record<string, string>; // per-cell fill color, key = "row:col"
+	colColors?: Record<string, string>; // per-column fill color, key = column index
+	rowColors?: Record<string, string>; // per-row fill color, key = row index
 	form?: "dnf" | "knf"; // KV map normal form (header labels + cell polarity)
 	kvVars?: string[]; // KV map variable names for x_1..x_n labels
 }

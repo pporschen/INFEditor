@@ -238,6 +238,7 @@ export default function App() {
 		row: number;
 		col: number;
 	} | null>(null);
+	const [tableColor, setTableColor] = useState("#f59e0b");
 	const [derivStep, setDerivStep] = useState<number | null>(null);
 	const [derivField, setDerivField] = useState<DerivField>("expr");
 	const [loopMode, setLoopMode] = useState(false); // marking a KV group loop
@@ -2576,6 +2577,101 @@ export default function App() {
 								<button onClick={() => dispatch({ type: "CLEAR_HIGHLIGHTS", id: selectedTable.id })}>
 									Clear all highlights
 								</button>
+								<span className="group-title">Color fill (independent)</span>
+								<div className="color-row">
+									<input
+										type="color"
+										className="color-custom"
+										value={tableColor}
+										title="Fill colour"
+										onChange={(e) => setTableColor(e.target.value)}
+									/>
+									<button
+										onClick={() =>
+											dispatch({
+												type: "SET_TABLE_COLOR",
+												id: selectedTable.id,
+												scope: "cell",
+												row: cellSel.row,
+												col: cellSel.col,
+												color: tableColor,
+											})
+										}
+									>
+										Cell
+									</button>
+									<button
+										onClick={() =>
+											dispatch({
+												type: "SET_TABLE_COLOR",
+												id: selectedTable.id,
+												scope: "col",
+												col: cellSel.col,
+												color: tableColor,
+											})
+										}
+									>
+										Column
+									</button>
+									<button
+										onClick={() =>
+											dispatch({
+												type: "SET_TABLE_COLOR",
+												id: selectedTable.id,
+												scope: "row",
+												row: cellSel.row,
+												color: tableColor,
+											})
+										}
+									>
+										Row
+									</button>
+								</div>
+								<div className="btn-grid">
+									<button
+										onClick={() =>
+											dispatch({
+												type: "SET_TABLE_COLOR",
+												id: selectedTable.id,
+												scope: "cell",
+												row: cellSel.row,
+												col: cellSel.col,
+												color: null,
+											})
+										}
+						>
+										Clear cell
+									</button>
+									<button
+										onClick={() =>
+											dispatch({
+												type: "SET_TABLE_COLOR",
+												id: selectedTable.id,
+												scope: "col",
+												col: cellSel.col,
+												color: null,
+											})
+										}
+						>
+										Clear col
+									</button>
+									<button
+										onClick={() =>
+											dispatch({
+												type: "SET_TABLE_COLOR",
+												id: selectedTable.id,
+												scope: "row",
+												row: cellSel.row,
+												color: null,
+											})
+										}
+						>
+										Clear row
+									</button>
+									<button onClick={() => dispatch({ type: "CLEAR_TABLE_COLORS", id: selectedTable.id })}>
+										Clear all colors
+									</button>
+								</div>
 							</>
 						)}
 						{cellSel && cellSel.id === selectedTable.id && cellSel.row >= (selectedTable.header ? 1 : 0) && (

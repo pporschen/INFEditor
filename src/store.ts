@@ -58,6 +58,8 @@ export type Action =
 	| { type: "TOGGLE_BOLD_SEP"; id: string; axis: "col" | "row"; index: number }
 	| { type: "TOGGLE_HIGHLIGHT"; id: string; axis: "col" | "row"; index: number }
 	| { type: "CLEAR_HIGHLIGHTS"; id: string }
+	| { type: "SET_TABLE_COLOR"; id: string; scope: "cell" | "row" | "col"; row?: number; col?: number; color: string | null }
+	| { type: "CLEAR_TABLE_COLORS"; id: string }
 	| { type: "TOGGLE_TABLE_HEADER"; id: string }
 	| { type: "TOGGLE_TABLE_MATH"; id: string }
 	| { type: "TOGGLE_CELL_TOGGLE_LOCK"; id: string }
@@ -352,6 +354,27 @@ function docReducer(doc: Doc, a: Action): Doc {
 				...doc,
 				tables: doc.tables.map((t) => {
 					if (t.id !== a.id) return t;
+					const shiftIndexMap = (src: Record<string, string> | undefined, insertAt: number, add: number) => {
+						const out: Record<string, string> = {};
+						for (const [k, v] of Object.entries(src ?? {})) {
+							const idx = Number(k);
+							if (Number.isNaN(idx)) continue;
+							const next = idx >= insertAt ? idx + add : idx;
+							out[String(next)] = v;
+						}
+						return out;
+					};
+					const shiftCellMapRows = (src: Record<string, string> | undefined, insertAt: number, add: number) => {
+						const out: Record<string, string> = {};
+						for (const [k, v] of Object.entries(src ?? {})) {
+							const [r, c] = k.split(":");
+							const rr = Number(r);
+							if (Number.isNaN(rr)) continue;
+							const nextR = rr >= insertAt ? rr + add : rr;
+							out[`${nextR}:${c}`] = v;
+						}
+						return out;
+					};
 					if (a.delta > 0 && a.after != null) {
 						const add = a.delta;
 						const insertAt = Math.max(0, Math.min(t.rows, a.after + 1));
@@ -380,6 +403,8 @@ function docReducer(doc: Doc, a: Action): Doc {
 							struck,
 							boldRows: shiftRows(t.boldRows),
 							hlRows: shiftRows(t.hlRows),
+							rowColors: shiftIndexMap(t.rowColors, insertAt, add),
+							cellColors: shiftCellMapRows(t.cellColors, insertAt, add),
 							loops,
 						};
 					}
@@ -400,6 +425,27 @@ function docReducer(doc: Doc, a: Action): Doc {
 				...doc,
 				tables: doc.tables.map((t) => {
 					if (t.id !== a.id) return t;
+					const shiftIndexMap = (src: Record<string, string> | undefined, insertAt: number, add: number) => {
+						const out: Record<string, string> = {};
+						for (const [k, v] of Object.entries(src ?? {})) {
+							const idx = Number(k);
+							if (Number.isNaN(idx)) continue;
+							const next = idx >= insertAt ? idx + add : idx;
+							out[String(next)] = v;
+						}
+						return out;
+					};
+					const shiftCellMapCols = (src: Record<string, string> | undefined, insertAt: number, add: number) => {
+						const out: Record<string, string> = {};
+						for (const [k, v] of Object.entries(src ?? {})) {
+							const [r, c] = k.split(":");
+							const cc = Number(c);
+							if (Number.isNaN(cc)) continue;
+							const nextC = cc >= insertAt ? cc + add : cc;
+							out[`${r}:${nextC}`] = v;
+						}
+						return out;
+					};
 					if (a.delta > 0 && a.after != null) {
 						const add = a.delta;
 						const insertAt = Math.max(0, Math.min(t.cols, a.after + 1));
@@ -429,6 +475,8 @@ function docReducer(doc: Doc, a: Action): Doc {
 							struck,
 							boldCols: shiftCols(t.boldCols),
 							hlCols: shiftCols(t.hlCols),
+							colColors: shiftIndexMap(t.colColors, insertAt, add),
+							cellColors: shiftCellMapCols(t.cellColors, insertAt, add),
 							loops,
 						};
 					}
@@ -518,6 +566,49 @@ function docReducer(doc: Doc, a: Action): Doc {
 			return {
 				...doc,
 				tables: doc.tables.map((t) => (t.id === a.id ? { ...t, hlCols: [], hlRows: [] } : t)),
+			};
+		case "SET_TABLE_COLOR":
+			return {
+				...doc,
+				tables: doc.tables.map((t) => {
+					if (t.id !== a.id) return t;
+					if (a.scope === "cell") {
+						if (a.row == null || a.col == null) return t;
+						const key = `${a.row}:${a.col}`;
+						const map = { ...(t.cellColors ?? {}) };
+						if (a.color) map[key] = a.color;
+						else delete map[key];
+						return { ...t, cellColors: map };
+					}
+					if (a.scope === "row") {
+						if (a.row == null) return t;
+						const key = String(a.row);
+						const map = { ...(t.rowColors ?? {}) };
+						if (a.color) map[key] = a.color;
+						else delete map[key];
+						return { ...t, rowColors: map };
+					}
+					if (a.col == null) return t;
+					const key = String(a.col);
+					const map = { ...(t.colColors ?? {}) };
+					if (a.color) map[key] = a.color;
+					else delete map[key];
+					return { ...t, colColors: map };
+				}),
+			};
+		case "CLEAR_TABLE_COLORS":
+			return {
+				...doc,
+				tables: doc.tables.map((t) =>
+					t.id === a.id
+						? {
+								...t,
+								cellColors: {},
+								colColors: {},
+								rowColors: {},
+							}
+						: t,
+				),
 			};
 		case "TOGGLE_STRIKE":
 			return {

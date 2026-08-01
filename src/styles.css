@@ -334,6 +334,9 @@ button.active kbd {
   opacity: 0.22;
   pointer-events: none;
 }
+.table-color {
+  pointer-events: none;
+}
 .table-text {
   font-size: calc(15px * var(--label-scale, 1));
   text-anchor: middle;

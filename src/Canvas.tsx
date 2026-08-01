@@ -779,6 +779,9 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 						}
 						const totalW = acc;
 						const struck = new Set(tb.struck ?? []);
+						const cellColors = tb.cellColors ?? {};
+						const colColors = tb.colColors ?? {};
+						const rowColors = tb.rowColors ?? {};
 						return (
 							<g key={tb.id}>
 								{tableSel && (
@@ -835,6 +838,57 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 										);
 									}),
 								)}
+
+								{/* independent table color layers (separate from Highlight) */}
+								{Object.entries(cellColors).map(([k, color]) => {
+									const [rs, cs] = k.split(":");
+									const r = Number(rs);
+									const c = Number(cs);
+									if (Number.isNaN(r) || Number.isNaN(c) || r < 0 || c < 0 || r >= tb.rows || c >= tb.cols) return null;
+									const x = px + colX[c];
+									const y = py + r * ch;
+									return (
+										<rect
+											key={`tcc-${k}`}
+											x={x}
+											y={y}
+											width={colW[c]}
+											height={ch}
+											className="table-color"
+											style={{ fill: color, opacity: 0.34 }}
+										/>
+									);
+								})}
+								{Object.entries(colColors).map(([cs, color]) => {
+									const c = Number(cs);
+									if (Number.isNaN(c) || c < 0 || c >= tb.cols) return null;
+									return (
+										<rect
+											key={`tcl-${c}`}
+											x={px + colX[c]}
+											y={py}
+											width={colW[c]}
+											height={tb.rows * ch}
+											className="table-color"
+											style={{ fill: color, opacity: 0.2 }}
+										/>
+									);
+								})}
+								{Object.entries(rowColors).map(([rs, color]) => {
+									const r = Number(rs);
+									if (Number.isNaN(r) || r < 0 || r >= tb.rows) return null;
+									return (
+										<rect
+											key={`tcr-${r}`}
+											x={px}
+											y={py + r * ch}
+											width={totalW}
+											height={ch}
+											className="table-color"
+											style={{ fill: color, opacity: 0.2 }}
+										/>
+									);
+								})}
 
 								{/* row/column highlights — translucent tint over the cells */}
 								{(tb.hlCols ?? [])
