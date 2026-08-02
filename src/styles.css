@@ -83,6 +83,23 @@ body {
   color: var(--muted);
 }
 
+.doc-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.doc-tab {
+  min-width: 120px;
+  max-width: 180px;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* two-column button layout to save vertical space */
 .btn-grid {
   display: grid;

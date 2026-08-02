@@ -11,6 +11,7 @@ import { kvHeaderRow, kvHeaderCol } from "./kv";
 import type { Doc, DiagTable, DerivField, LabelPos, LineArrow, Mode, RelType, Selection, Shape } from "./types";
 
 const STORAGE_KEY = "infeditor.doc.v1";
+const WORKSPACE_KEY = "infeditor.workspace.v1";
 const CURVE_STEP = 24; // pixels of bow added per button press
 const CURVE_MAX = 168; // clamp so arcs stay reasonable
 const LOOP_SIZE_MIN = -18; // clamp for self-loop extra size (keeps a visible loop)
@@ -83,14 +84,54 @@ function normalizeDoc(d: unknown): Doc {
 	};
 }
 
-function loadInitial(): Doc {
+interface DocTab {
+	id: string;
+	doc: Doc;
+}
+
+interface WorkspaceSnapshot {
+	tabs: DocTab[];
+	activeId: string;
+	activeDoc: Doc;
+}
+
+function loadInitialWorkspace(): WorkspaceSnapshot {
+	const empty = normalizeDoc(null);
+	try {
+		const raw = localStorage.getItem(WORKSPACE_KEY);
+		if (raw) {
+			const parsed = JSON.parse(raw) as { tabs?: Array<{ id?: string; doc?: unknown }>; activeId?: string };
+			const tabs: DocTab[] = (parsed.tabs ?? [])
+				.map((t) => ({
+					id: typeof t?.id === "string" && t.id ? t.id : crypto.randomUUID(),
+					doc: normalizeDoc(t?.doc),
+				}))
+				.filter((t) => !!t.id);
+			if (tabs.length > 0) {
+				const activeId =
+					typeof parsed.activeId === "string" && tabs.some((t) => t.id === parsed.activeId)
+						? parsed.activeId
+						: tabs[0].id;
+				const activeDoc = tabs.find((t) => t.id === activeId)?.doc ?? tabs[0].doc;
+				return { tabs, activeId, activeDoc };
+			}
+		}
+	} catch {
+		/* ignore corrupt workspace autosave */
+	}
+	let legacy = empty;
 	try {
 		const raw = localStorage.getItem(STORAGE_KEY);
-		if (raw) return normalizeDoc(JSON.parse(raw));
+		if (raw) legacy = normalizeDoc(JSON.parse(raw));
 	} catch {
 		/* ignore corrupt autosave */
 	}
-	return normalizeDoc(null);
+	const id = crypto.randomUUID();
+	return {
+		tabs: [{ id, doc: legacy }],
+		activeId: id,
+		activeDoc: legacy,
+	};
 }
 
 type TablePreset = "blank" | "kv3" | "kv4" | "qmc" | "qmp";
@@ -207,7 +248,10 @@ function makeTable(
 }
 
 export default function App() {
-	const { doc, canUndo, dispatch } = useEditor(loadInitial);
+	const initialWorkspace = useMemo(loadInitialWorkspace, []);
+	const { doc, canUndo, dispatch } = useEditor(() => initialWorkspace.activeDoc);
+	const [tabs, setTabs] = useState<DocTab[]>(() => initialWorkspace.tabs);
+	const [activeTabId, setActiveTabId] = useState(() => initialWorkspace.activeId);
 	const [mode, setMode] = useState<Mode>("node");
 	const [shape, setShape] = useState<Shape>("circle");
 	const [textKind, setTextKind] = useState<"label" | "text">("text");
@@ -264,10 +308,18 @@ export default function App() {
 	const returnModeRef = useRef<Mode | null>(null); // creation mode to resume after Done
 	const pendingCaretRef = useRef<number | null>(null); // caret to set after focusing
 
-	// autosave on every change
+	// keep the currently active tab's snapshot in sync with the editor document
 	useEffect(() => {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
-	}, [doc]);
+		setTabs((prev) => prev.map((t) => (t.id === activeTabId ? { ...t, doc } : t)));
+	}, [doc, activeTabId]);
+
+	// autosave all tabs + active tab to a workspace snapshot (and keep legacy
+	// single-doc autosave as a compatibility fallback).
+	useEffect(() => {
+		localStorage.setItem(WORKSPACE_KEY, JSON.stringify({ tabs, activeId: activeTabId }));
+		const active = tabs.find((t) => t.id === activeTabId);
+		if (active) localStorage.setItem(STORAGE_KEY, JSON.stringify(active.doc));
+	}, [tabs, activeTabId]);
 
 	// track the canvas aspect ratio so the viewBox matches it (no letterboxing)
 	useEffect(() => {
@@ -291,6 +343,69 @@ export default function App() {
 	function setExpandedValue(value: string) {
 		setExpandedEditor((prev) => (prev ? { ...prev, value } : prev));
 		expandedApplyRef.current(value);
+	}
+
+	function tabLabel(tab: DocTab, index: number): string {
+		return tab.doc.name?.trim() || `Doc ${index + 1}`;
+	}
+
+	function activeTabLabel(): string {
+		const i = tabs.findIndex((t) => t.id === activeTabId);
+		if (i < 0) return "Doc";
+		return tabLabel(tabs[i], i);
+	}
+
+	function resetForDocSwitch() {
+		setSelection(null);
+		setCellSel(null);
+		setDerivStep(null);
+		setPendingFrom(null);
+		setPendingCorner(null);
+		setHoverCell(null);
+		setLoopMode(false);
+		setLoopFirst(null);
+		setTablesJumpOpen(false);
+		setExpandedEditor(null);
+		endMultiSelect();
+		resetView();
+	}
+
+	function switchToTab(id: string) {
+		if (id === activeTabId) return;
+		const target = tabs.find((t) => t.id === id);
+		if (!target) return;
+		setActiveTabId(id);
+		dispatch({ type: "LOAD", doc: target.doc });
+		resetForDocSwitch();
+	}
+
+	function newTab() {
+		const id = crypto.randomUUID();
+		const fresh = normalizeDoc(null);
+		setTabs((prev) => [...prev, { id, doc: fresh }]);
+		setActiveTabId(id);
+		dispatch({ type: "LOAD", doc: fresh });
+		resetForDocSwitch();
+	}
+
+	function closeTab() {
+		if (tabs.length <= 1) return;
+		if (!confirm("Close this document tab?")) return;
+		const idx = tabs.findIndex((t) => t.id === activeTabId);
+		if (idx < 0) return;
+		const remaining = tabs.filter((t) => t.id !== activeTabId);
+		const next = remaining[Math.min(idx, remaining.length - 1)];
+		setTabs(remaining);
+		setActiveTabId(next.id);
+		dispatch({ type: "LOAD", doc: next.doc });
+		resetForDocSwitch();
+	}
+
+	function renameActiveTab() {
+		const current = doc.name?.trim() || "";
+		const next = window.prompt("Rename this tab:", current);
+		if (next == null) return;
+		dispatch({ type: "SET_DOC_NAME", name: next.trim() });
 	}
 
 	const modalPreviewSource = expandedEditor ? expandedEditor.value.replace(/\n/g, "\\\\") : "";
@@ -502,7 +617,7 @@ export default function App() {
 	// Save the whole document to a .json file the user can reopen later to keep
 	// editing (distinct from PNG/LaTeX export, which is final output).
 	function saveFile() {
-		const suggested = doc.name ? `${doc.name}.infedit.json` : "diagram.infedit.json";
+		const suggested = `${activeTabLabel()}.infedit.json`;
 		const name = window.prompt("Save diagram as:", suggested);
 		if (!name) return; // cancelled
 		const clean = name.replace(/[\\/:*?"<>|]+/g, "_").trim() || "diagram.infedit.json";
@@ -529,9 +644,17 @@ export default function App() {
 		file
 			.text()
 			.then((txt) => {
-				dispatch({ type: "LOAD", doc: normalizeDoc(JSON.parse(txt)) });
-				setSelection(null);
-				endMultiSelect();
+				let loaded = normalizeDoc(JSON.parse(txt));
+				const fileBase = file.name
+					.replace(/\.infedit\.json$/i, "")
+					.replace(/\.json$/i, "")
+					.trim();
+				if (!loaded.name && fileBase) loaded = { ...loaded, name: fileBase };
+				const id = crypto.randomUUID();
+				setTabs((prev) => [...prev, { id, doc: loaded }]);
+				setActiveTabId(id);
+				dispatch({ type: "LOAD", doc: loaded });
+				resetForDocSwitch();
 			})
 			.catch(() => alert("Could not open that file — it is not a valid saved diagram."));
 	}
@@ -1294,6 +1417,7 @@ export default function App() {
 				if (growable && row === rows - 1) {
 					dispatch({ type: "TABLE_ROWS", id: cellSel.id, delta: 1, after: row });
 					row = row + 1;
+					col = 0;
 				} else {
 					row = Math.min(rows - 1, row + 1);
 				}
@@ -1477,6 +1601,29 @@ export default function App() {
 		<div className="app">
 			<aside className="toolbar">
 				<h1>INFEditor</h1>
+
+				<div className="group">
+					<span className="group-title">Documents</span>
+					<div className="doc-tabs">
+						{tabs.map((tab, i) => (
+							<button
+								key={tab.id}
+								className={`doc-tab ${tab.id === activeTabId ? "active" : ""}`}
+								onClick={() => switchToTab(tab.id)}
+								title={tabLabel(tab, i)}
+							>
+								{i + 1}. {tabLabel(tab, i)}
+							</button>
+						))}
+					</div>
+					<div className="btn-grid">
+						<button onClick={newTab}>New tab</button>
+						<button onClick={closeTab} disabled={tabs.length <= 1}>
+							Close tab
+						</button>
+						<button onClick={renameActiveTab}>Rename tab</button>
+					</div>
+				</div>
 
 				<div className="group">
 					<span className="group-title">Mode</span>
@@ -1728,7 +1875,7 @@ export default function App() {
 						<button onClick={saveFile} title="Save the editable diagram to a .json file">
 							Save
 						</button>
-						<button onClick={() => fileInputRef.current?.click()} title="Open a saved .json diagram">
+						<button onClick={() => fileInputRef.current?.click()} title="Open a saved .json diagram into a new tab">
 							Open…
 						</button>
 						<button
@@ -2639,7 +2786,7 @@ export default function App() {
 												color: null,
 											})
 										}
-						>
+									>
 										Clear cell
 									</button>
 									<button
@@ -2652,7 +2799,7 @@ export default function App() {
 												color: null,
 											})
 										}
-						>
+									>
 										Clear col
 									</button>
 									<button
@@ -2665,7 +2812,7 @@ export default function App() {
 												color: null,
 											})
 										}
-						>
+									>
 										Clear row
 									</button>
 									<button onClick={() => dispatch({ type: "CLEAR_TABLE_COLORS", id: selectedTable.id })}>

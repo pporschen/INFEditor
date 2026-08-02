@@ -58,7 +58,14 @@ export type Action =
 	| { type: "TOGGLE_BOLD_SEP"; id: string; axis: "col" | "row"; index: number }
 	| { type: "TOGGLE_HIGHLIGHT"; id: string; axis: "col" | "row"; index: number }
 	| { type: "CLEAR_HIGHLIGHTS"; id: string }
-	| { type: "SET_TABLE_COLOR"; id: string; scope: "cell" | "row" | "col"; row?: number; col?: number; color: string | null }
+	| {
+			type: "SET_TABLE_COLOR";
+			id: string;
+			scope: "cell" | "row" | "col";
+			row?: number;
+			col?: number;
+			color: string | null;
+	  }
 	| { type: "CLEAR_TABLE_COLORS"; id: string }
 	| { type: "TOGGLE_TABLE_HEADER"; id: string }
 	| { type: "TOGGLE_TABLE_MATH"; id: string }
