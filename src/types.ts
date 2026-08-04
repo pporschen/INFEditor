@@ -14,6 +14,8 @@ export interface DiagNode {
 	h?: number; // shape height in grid cells (circle/box/asm/diamond)
 	gate?: GateType; // boxes only: render as an IEC logic-gate symbol
 	hollow?: boolean; // dots only: draw outlined instead of filled
+	transparent?: boolean; // boxes only: draw outline without fill
+	negPos?: 0 | 1 | 2 | 3; // boxes only: negation bubble side (right, bottom, left, top)
 }
 
 // UML relationship end-types (plus 'arrow' = the default automata arrowhead).

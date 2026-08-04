@@ -683,6 +683,15 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 						const c = center(n);
 						const { hw, hh } = halfExtents(n);
 						const gate = n.gate ? GATES[n.gate] : null;
+						const negPos = n.negPos ?? 0;
+						const negBubble =
+							negPos === 1
+								? { x: c.x, y: c.y + hh + 5 }
+								: negPos === 2
+									? { x: c.x - hw - 5, y: c.y }
+									: negPos === 3
+										? { x: c.x, y: c.y - hh - 5 }
+										: { x: c.x + hw + 5, y: c.y };
 						const isSel = (selection?.kind === "node" && selection.id === n.id) || multi.has("node:" + n.id);
 						const isPending = pendingFrom === n.id;
 						return (
@@ -711,10 +720,17 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 										className="node-fill"
 									/>
 								) : (
-									<rect x={c.x - hw} y={c.y - hh} width={hw * 2} height={hh * 2} rx={4} className="node-fill" />
+									<rect
+										x={c.x - hw}
+										y={c.y - hh}
+										width={hw * 2}
+										height={hh * 2}
+										rx={4}
+										className={n.transparent ? "node-outline" : "node-fill"}
+									/>
 								)}
 
-								{gate?.neg && <circle cx={c.x + hw + 5} cy={c.y} r={5} className="gate-bubble" />}
+								{gate?.neg && <circle cx={negBubble.x} cy={negBubble.y} r={5} className="gate-bubble" />}
 
 								{(isSel || isPending) && (
 									<circle

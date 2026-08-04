@@ -269,6 +269,11 @@ button.active kbd {
   stroke: var(--stroke);
   stroke-width: 2;
 }
+.node-outline {
+  fill: none;
+  stroke: var(--stroke);
+  stroke-width: 2;
+}
 .node-inner {
   stroke: var(--stroke);
   stroke-width: 2;

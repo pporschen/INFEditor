@@ -1125,6 +1125,11 @@ export default function App() {
 		if (selection?.kind !== "node") return;
 		const n = doc.nodes.find((x) => x.id === selection.id);
 		if (!n) return;
+		if (n.w != null && n.h != null) {
+			// MOVE_NODE uses top-left anchor coordinates for sized nodes.
+			dispatch({ type: "MOVE_NODE", id: n.id, x: n.x - n.w / 2 + dx, y: n.y - n.h / 2 + dy });
+			return;
+		}
 		dispatch({ type: "MOVE_NODE", id: n.id, x: n.x + dx, y: n.y + dy });
 	}
 
@@ -2164,6 +2169,13 @@ export default function App() {
 						)}
 						{selectedNode.shape === "box" && (
 							<>
+								<span className="group-title">Style</span>
+								<button
+									className={selectedNode.transparent ? "active" : ""}
+									onClick={() => dispatch({ type: "TOGGLE_NODE_TRANSPARENT", id: selectedNode.id })}
+								>
+									Transparent box (outline only)
+								</button>
 								<span className="group-title">Logic gate (Schaltnetz)</span>
 								<div className="gate-grid">
 									<button
@@ -2176,7 +2188,13 @@ export default function App() {
 										<button
 											key={g}
 											className={selectedNode.gate === g ? "active" : ""}
-											onClick={() => dispatch({ type: "SET_NODE_GATE", id: selectedNode.id, gate: g })}
+											onClick={() => {
+												if (selectedNode.gate === g && GATES[g].neg) {
+													dispatch({ type: "ROTATE_NODE_NEG", id: selectedNode.id });
+													return;
+												}
+												dispatch({ type: "SET_NODE_GATE", id: selectedNode.id, gate: g });
+											}}
 											title={GATES[g].name}
 										>
 											{GATES[g].name}

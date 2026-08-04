@@ -94,9 +94,11 @@ export type Action =
 	| { type: "SET_EDGE_ANGLE"; id: string; angle: number }
 	| { type: "SET_EDGE_REL"; id: string; rel: RelType }
 	| { type: "SET_NODE_GATE"; id: string; gate: GateType | "none" }
+	| { type: "ROTATE_NODE_NEG"; id: string }
 	| { type: "TOGGLE_ACCEPTING"; id: string }
 	| { type: "TOGGLE_START"; id: string }
 	| { type: "TOGGLE_DOT_HOLLOW"; id: string }
+	| { type: "TOGGLE_NODE_TRANSPARENT"; id: string }
 	| { type: "CLEAR" }
 	| { type: "LOAD"; doc: Doc }
 	| { type: "UNDO" };
@@ -256,6 +258,13 @@ function docReducer(doc: Doc, a: Action): Doc {
 				...doc,
 				nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, gate: a.gate === "none" ? undefined : a.gate } : n)),
 			};
+		case "ROTATE_NODE_NEG":
+			return {
+				...doc,
+				nodes: doc.nodes.map((n) =>
+					n.id === a.id ? { ...n, negPos: (((n.negPos ?? 0) + 1) % 4) as 0 | 1 | 2 | 3 } : n,
+				),
+			};
 		case "TOGGLE_ACCEPTING":
 			return {
 				...doc,
@@ -270,6 +279,11 @@ function docReducer(doc: Doc, a: Action): Doc {
 			return {
 				...doc,
 				nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, hollow: !n.hollow } : n)),
+			};
+		case "TOGGLE_NODE_TRANSPARENT":
+			return {
+				...doc,
+				nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, transparent: !n.transparent } : n)),
 			};
 		case "ADD_TEXT":
 			return {
