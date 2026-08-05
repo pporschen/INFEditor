@@ -1,6 +1,7 @@
 export type Shape = "circle" | "box" | "asm" | "diamond" | "dot";
 
 export type GateType = "and" | "nand" | "or" | "nor" | "xor" | "xnor" | "not" | "buffer";
+export type LabelRotation = 0 | 90 | 180 | 270;
 
 export interface DiagNode {
 	id: string;
@@ -16,6 +17,7 @@ export interface DiagNode {
 	hollow?: boolean; // dots only: draw outlined instead of filled
 	transparent?: boolean; // boxes only: draw outline without fill
 	negPos?: 0 | 1 | 2 | 3; // boxes only: negation bubble side (right, bottom, left, top)
+	labelRot?: LabelRotation; // node label rotation in 90-degree steps
 }
 
 // UML relationship end-types (plus 'arrow' = the default automata arrowhead).
@@ -36,6 +38,7 @@ export interface DiagEdge {
 	curve?: number; // normal edges: perpendicular bow in px. self-loops: extra size in px.
 	angle?: number; // self-loops only: direction of the loop around the state, in degrees
 	rel?: RelType; // arrowhead / line style (undefined = 'arrow')
+	labelRot?: LabelRotation; // edge label rotation in 90-degree steps
 }
 
 export type LineArrow = "none" | "start" | "end" | "both";
@@ -51,6 +54,7 @@ export interface DiagLine {
 	arrow?: Exclude<LineArrow, "none">; // arrowhead placement (undefined = none)
 	label?: string;
 	labelPos?: LabelPos; // where the label sits along the wire (default 'middle')
+	labelRot?: LabelRotation; // line label rotation in 90-degree steps
 }
 
 // A free-standing text item. 'label' = short, math markup (renderRich, `\\`).
@@ -64,6 +68,7 @@ export interface DiagText {
 	size?: number; // font-size multiplier (default 1)
 	align?: "left" | "center";
 	bold?: boolean;
+	labelRot?: LabelRotation; // label rotation in 90-degree steps (for kind='label')
 }
 
 // A KV/Karnaugh group loop: a rounded outline around a rectangular cell block

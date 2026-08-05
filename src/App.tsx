@@ -8,7 +8,7 @@ import { GATES, GATE_ORDER } from "./gates";
 import { GRID, W, H, PAGE_W, PAGE_H, PAGE_MARGIN, pageTop, halfExtents } from "./geometry";
 import { tableToLatex, derivToLatex } from "./latex";
 import { kvHeaderRow, kvHeaderCol } from "./kv";
-import type { Doc, DiagTable, DerivField, LabelPos, LineArrow, Mode, RelType, Selection, Shape } from "./types";
+import type { Doc, DiagTable, DerivField, LabelPos, LabelRotation, LineArrow, Mode, RelType, Selection, Shape } from "./types";
 
 const STORAGE_KEY = "infeditor.doc.v1";
 const WORKSPACE_KEY = "infeditor.workspace.v1";
@@ -54,6 +54,11 @@ function boolConvert(s: string, atEnd: boolean): string {
 const ZOOM_MIN = W * 0.25; // most zoomed-in (smallest viewBox)
 const ZOOM_MAX = W * 8; // most zoomed-out (largest viewBox)
 const DEFAULT_VIEW_W = (PAGE_W + 2 * GRID) * Math.pow(1.25, 2); // default zoomed out by 2 steps
+
+function rotCW(rot: LabelRotation | undefined): LabelRotation {
+	if (rot == null) return 90;
+	return (((rot + 90) % 360) || 0) as LabelRotation;
+}
 
 // UML relationship picker. Glyphs mark the end where the marker sits.
 // Direction: draw from the "source" of the arrow to its head — subclass→super
@@ -1133,6 +1138,26 @@ export default function App() {
 		dispatch({ type: "MOVE_NODE", id: n.id, x: n.x + dx, y: n.y + dy });
 	}
 
+	function rotateNodeLabelCW() {
+		if (!selectedNode) return;
+		dispatch({ type: "SET_NODE_LABEL_ROT", id: selectedNode.id, rot: rotCW(selectedNode.labelRot) });
+	}
+
+	function rotateEdgeLabelCW() {
+		if (!selectedEdge) return;
+		dispatch({ type: "SET_EDGE_LABEL_ROT", id: selectedEdge.id, rot: rotCW(selectedEdge.labelRot) });
+	}
+
+	function rotateLineLabelCW() {
+		if (!selectedLineId || !selectedLine) return;
+		dispatch({ type: "SET_LINE_LABEL_ROT", id: selectedLineId, rot: rotCW(selectedLine.labelRot) });
+	}
+
+	function rotateTextLabelCW() {
+		if (!selectedText) return;
+		dispatch({ type: "SET_TEXT_LABEL_ROT", id: selectedText.id, rot: rotCW(selectedText.labelRot) });
+	}
+
 	// group multi-select: set of `${kind}:${id}` keys for highlighting in Canvas
 	const multiSet = useMemo(() => new Set(multi.map((r) => `${r.kind}:${r.id}`)), [multi]);
 
@@ -2127,6 +2152,15 @@ export default function App() {
 								</button>
 							</label>
 						)}
+						{selectedNode.shape !== "dot" && (
+							<>
+								<span className="group-title">Label rotation</span>
+								<div className="curve-row">
+									<button onClick={rotateNodeLabelCW}>↻ +90°</button>
+									<button onClick={() => dispatch({ type: "SET_NODE_LABEL_ROT", id: selectedNode.id, rot: 0 })}>Reset</button>
+								</div>
+							</>
+						)}
 						<span className="group-title">Move (1/4 cell)</span>
 						<div className="dpad">
 							<span />
@@ -2235,6 +2269,11 @@ export default function App() {
 								Expand
 							</button>
 						</label>
+						<span className="group-title">Label rotation</span>
+						<div className="curve-row">
+							<button onClick={rotateEdgeLabelCW}>↻ +90°</button>
+							<button onClick={() => dispatch({ type: "SET_EDGE_LABEL_ROT", id: selectedEdge.id, rot: 0 })}>Reset</button>
+						</div>
 						{selectedEdge.from !== selectedEdge.to && (
 							<>
 								<span className="group-title">Relationship</span>
@@ -2324,6 +2363,11 @@ export default function App() {
 								Expand
 							</button>
 						</label>
+						<span className="group-title">Label rotation</span>
+						<div className="curve-row">
+							<button onClick={rotateLineLabelCW}>↻ +90°</button>
+							<button onClick={() => dispatch({ type: "SET_LINE_LABEL_ROT", id: selectedLineId, rot: 0 })}>Reset</button>
+						</div>
 						<span className="group-title">Label position</span>
 						<div className="curve-row">
 							{(["start", "middle", "end"] as LabelPos[]).map((p) => (
@@ -2471,6 +2515,11 @@ export default function App() {
 								Expand
 							</button>
 						</label>
+						<span className="group-title">Label rotation</span>
+						<div className="curve-row">
+							<button onClick={rotateTextLabelCW}>↻ +90°</button>
+							<button onClick={() => dispatch({ type: "SET_TEXT_LABEL_ROT", id: selectedText.id, rot: 0 })}>Reset</button>
+						</div>
 						<span className="group-title">Move (1/4 cell)</span>
 						<div className="dpad">
 							<span />
@@ -3239,6 +3288,13 @@ export default function App() {
 								title="RTL assign  \leftarrow"
 							>
 								← RTL
+							</button>
+							<button
+								onMouseDown={(e) => e.preventDefault()}
+								onClick={() => insertText("\\equiv ")}
+								title="Equivalent  \equiv"
+							>
+								≡ Eqv
 							</button>
 							<button onMouseDown={(e) => e.preventDefault()} onClick={() => insertText("(")} title="Open paren">
 								(

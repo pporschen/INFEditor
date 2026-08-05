@@ -89,7 +89,11 @@ export type Action =
 	| { type: "SET_PAGES"; count: number }
 	| { type: "SET_DOC_NAME"; name: string }
 	| { type: "SET_NODE_LABEL"; id: string; label: string }
+	| { type: "SET_NODE_LABEL_ROT"; id: string; rot: 0 | 90 | 180 | 270 }
 	| { type: "SET_EDGE_LABEL"; id: string; label: string }
+	| { type: "SET_EDGE_LABEL_ROT"; id: string; rot: 0 | 90 | 180 | 270 }
+	| { type: "SET_LINE_LABEL_ROT"; id: string; rot: 0 | 90 | 180 | 270 }
+	| { type: "SET_TEXT_LABEL_ROT"; id: string; rot: 0 | 90 | 180 | 270 }
 	| { type: "SET_EDGE_CURVE"; id: string; curve: number }
 	| { type: "SET_EDGE_ANGLE"; id: string; angle: number }
 	| { type: "SET_EDGE_REL"; id: string; rel: RelType }
@@ -228,15 +232,30 @@ function docReducer(doc: Doc, a: Action): Doc {
 				...doc,
 				lines: doc.lines.map((l) => (l.id === a.id ? { ...l, labelPos: a.pos } : l)),
 			};
+		case "SET_LINE_LABEL_ROT":
+			return {
+				...doc,
+				lines: doc.lines.map((l) => (l.id === a.id ? { ...l, labelRot: a.rot } : l)),
+			};
 		case "SET_NODE_LABEL":
 			return {
 				...doc,
 				nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, label: a.label } : n)),
 			};
+		case "SET_NODE_LABEL_ROT":
+			return {
+				...doc,
+				nodes: doc.nodes.map((n) => (n.id === a.id ? { ...n, labelRot: a.rot } : n)),
+			};
 		case "SET_EDGE_LABEL":
 			return {
 				...doc,
 				edges: doc.edges.map((e) => (e.id === a.id ? { ...e, label: a.label } : e)),
+			};
+		case "SET_EDGE_LABEL_ROT":
+			return {
+				...doc,
+				edges: doc.edges.map((e) => (e.id === a.id ? { ...e, labelRot: a.rot } : e)),
 			};
 		case "SET_EDGE_CURVE":
 			return {
@@ -304,6 +323,11 @@ function docReducer(doc: Doc, a: Action): Doc {
 			return {
 				...doc,
 				texts: doc.texts.map((t) => (t.id === a.id ? { ...t, text: a.text } : t)),
+			};
+		case "SET_TEXT_LABEL_ROT":
+			return {
+				...doc,
+				texts: doc.texts.map((t) => (t.id === a.id ? { ...t, labelRot: a.rot } : t)),
 			};
 		case "SET_TEXT_SIZE":
 			return {

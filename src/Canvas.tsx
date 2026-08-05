@@ -7,6 +7,11 @@ const LOOP_BASE = 30; // base bulge distance of a self-loop, in px
 const LOOP_W = 20; // half-width of the self-loop
 const CELL_PAD = 12; // constant horizontal padding (px) each side of cell text
 
+function rotTransform(rot: 0 | 90 | 180 | 270 | undefined, cx: number, cy: number): string | undefined {
+	if (!rot) return undefined;
+	return `rotate(${rot} ${cx} ${cy})`;
+}
+
 // Render a small LaTeX subset used for logic/boolean formatting:
 //   sub/superscript  q_0  x^2  a_{10}
 //   negation bar     \overline{A+B}  (\bar works too, nesting supported)
@@ -28,6 +33,7 @@ const OP: Record<string, string> = {
 	Leftrightarrow: "⇔",
 	iff: "⇔",
 	neq: "≠",
+	equiv: "≡",
 	ss: "ß",
 };
 
@@ -102,7 +108,7 @@ export function renderRich(s: string): ReactNode {
 				continue;
 			}
 			const m =
-				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|Leftrightarrow|implies|iff|left|right|neq|ss)/.exec(
+				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|Leftrightarrow|implies|iff|left|right|neq|equiv|ss)/.exec(
 					s.slice(i),
 				);
 			if (m) {
@@ -561,7 +567,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 									markerEnd={l.arrow === "end" || l.arrow === "both" ? "url(#arrow)" : undefined}
 								/>
 								{l.label && (
-									<text x={lx} y={ly} className="edge-label">
+									<text x={lx} y={ly} className="edge-label" transform={rotTransform(l.labelRot, lx, ly)}>
 										{renderRich(l.label)}
 									</text>
 								)}
@@ -606,7 +612,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 										fill="none"
 									/>
 									{e.label && (
-										<text x={lx} y={ly} className="edge-label">
+										<text x={lx} y={ly} className="edge-label" transform={rotTransform(e.labelRot, lx, ly)}>
 											{renderRich(e.label)}
 										</text>
 									)}
@@ -647,7 +653,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 									fill="none"
 								/>
 								{e.label && (
-									<text x={lx} y={ly - 6} className="edge-label">
+									<text x={lx} y={ly - 6} className="edge-label" transform={rotTransform(e.labelRot, lx, ly - 6)}>
 										{renderRich(e.label)}
 									</text>
 								)}
@@ -748,13 +754,18 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 											{gate.sym}
 										</text>
 										{n.label && (
-											<text x={c.x} y={c.y - hh - 8} className="node-label">
+											<text
+												x={c.x}
+												y={c.y - hh - 8}
+												className="node-label"
+												transform={rotTransform(n.labelRot, c.x, c.y - hh - 8)}
+											>
 												{renderLines(n.label, c.x)}
 											</text>
 										)}
 									</>
 								) : (
-									<text x={c.x} y={c.y} className="node-label">
+									<text x={c.x} y={c.y} className="node-label" transform={rotTransform(n.labelRot, c.x, c.y)}>
 										{renderLines(n.label, c.x, "1.6em", undefined, true)}
 									</text>
 								)}
@@ -1245,6 +1256,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 								y={py}
 								onClick={() => onTextClick(t.id)}
 								className={`free-text${selected ? " selected" : ""}${t.text ? "" : " placeholder"}`}
+								transform={rotTransform(t.labelRot, px, py)}
 							>
 								{t.text ? renderLines(t.text, px) : "Text…"}
 							</text>
