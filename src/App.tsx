@@ -8,7 +8,18 @@ import { GATES, GATE_ORDER } from "./gates";
 import { GRID, W, H, PAGE_W, PAGE_H, PAGE_MARGIN, pageTop, halfExtents } from "./geometry";
 import { tableToLatex, derivToLatex } from "./latex";
 import { kvHeaderRow, kvHeaderCol } from "./kv";
-import type { Doc, DiagTable, DerivField, LabelPos, LabelRotation, LineArrow, Mode, RelType, Selection, Shape } from "./types";
+import type {
+	Doc,
+	DiagTable,
+	DerivField,
+	LabelPos,
+	LabelRotation,
+	LineArrow,
+	Mode,
+	RelType,
+	Selection,
+	Shape,
+} from "./types";
 
 const STORAGE_KEY = "infeditor.doc.v1";
 const WORKSPACE_KEY = "infeditor.workspace.v1";
@@ -57,7 +68,7 @@ const DEFAULT_VIEW_W = (PAGE_W + 2 * GRID) * Math.pow(1.25, 2); // default zoome
 
 function rotCW(rot: LabelRotation | undefined): LabelRotation {
 	if (rot == null) return 90;
-	return (((rot + 90) % 360) || 0) as LabelRotation;
+	return ((rot + 90) % 360 || 0) as LabelRotation;
 }
 
 // UML relationship picker. Glyphs mark the end where the marker sits.
@@ -86,6 +97,7 @@ function normalizeDoc(d: unknown): Doc {
 		tables: o.tables ?? [],
 		derivations: o.derivations ?? [],
 		pages: o.pages ?? 1,
+		name: typeof o.name === "string" ? o.name : undefined,
 	};
 }
 
@@ -1633,29 +1645,6 @@ export default function App() {
 				<h1>INFEditor</h1>
 
 				<div className="group">
-					<span className="group-title">Documents</span>
-					<div className="doc-tabs">
-						{tabs.map((tab, i) => (
-							<button
-								key={tab.id}
-								className={`doc-tab ${tab.id === activeTabId ? "active" : ""}`}
-								onClick={() => switchToTab(tab.id)}
-								title={tabLabel(tab, i)}
-							>
-								{i + 1}. {tabLabel(tab, i)}
-							</button>
-						))}
-					</div>
-					<div className="btn-grid">
-						<button onClick={newTab}>New tab</button>
-						<button onClick={closeTab} disabled={tabs.length <= 1}>
-							Close tab
-						</button>
-						<button onClick={renameActiveTab}>Rename tab</button>
-					</div>
-				</div>
-
-				<div className="group">
 					<span className="group-title">Mode</span>
 					<div className="btn-grid">
 						<button className={mode === "select" ? "active" : ""} onClick={() => changeMode("select")}>
@@ -1997,25 +1986,48 @@ export default function App() {
 					onDerivRowClick={handleDerivRowClick}
 					onExprCaret={handleExprCaret}
 				/>
-				<div className="page-jump" aria-label="Page navigation">
-					<button onClick={() => jumpToPage(activePage - 1)} disabled={activePage <= 0} title="Previous page">
-						◀
-					</button>
-					<div className="page-jump-list">
-						{Array.from({ length: doc.pages }, (_, i) => (
-							<button
-								key={i}
-								className={i === activePage ? "active" : ""}
-								onClick={() => jumpToPage(i)}
-								title={`Jump to page ${i + 1}`}
-							>
-								{i + 1}
-							</button>
-						))}
+				<div className="bottom-dock">
+					<div className="page-jump" aria-label="Page navigation">
+						<button onClick={() => jumpToPage(activePage - 1)} disabled={activePage <= 0} title="Previous page">
+							◀
+						</button>
+						<div className="page-jump-list">
+							{Array.from({ length: doc.pages }, (_, i) => (
+								<button
+									key={i}
+									className={i === activePage ? "active" : ""}
+									onClick={() => jumpToPage(i)}
+									title={`Jump to page ${i + 1}`}
+								>
+									{i + 1}
+								</button>
+							))}
+						</div>
+						<button onClick={() => jumpToPage(activePage + 1)} disabled={activePage >= doc.pages - 1} title="Next page">
+							▶
+						</button>
 					</div>
-					<button onClick={() => jumpToPage(activePage + 1)} disabled={activePage >= doc.pages - 1} title="Next page">
-						▶
-					</button>
+					<div className="doc-dock" aria-label="Document tabs">
+						<div className="doc-tabs dock">
+							{tabs.map((tab, i) => (
+								<button
+									key={tab.id}
+									className={`doc-tab ${tab.id === activeTabId ? "active" : ""}`}
+									onClick={() => switchToTab(tab.id)}
+									title={tabLabel(tab, i)}
+								>
+									{i + 1}. {tabLabel(tab, i)}
+								</button>
+							))}
+						</div>
+						<div className="doc-dock-actions">
+							<button onClick={newTab}>New tab</button>
+							<button onClick={renameActiveTab}>Rename</button>
+							<button onClick={closeTab} disabled={tabs.length <= 1}>
+								Close
+							</button>
+						</div>
+					</div>
 				</div>
 				{expandedEditor && (
 					<div className="editor-modal-backdrop" onClick={() => setExpandedEditor(null)}>
@@ -2157,7 +2169,9 @@ export default function App() {
 								<span className="group-title">Label rotation</span>
 								<div className="curve-row">
 									<button onClick={rotateNodeLabelCW}>↻ +90°</button>
-									<button onClick={() => dispatch({ type: "SET_NODE_LABEL_ROT", id: selectedNode.id, rot: 0 })}>Reset</button>
+									<button onClick={() => dispatch({ type: "SET_NODE_LABEL_ROT", id: selectedNode.id, rot: 0 })}>
+										Reset
+									</button>
 								</div>
 							</>
 						)}
@@ -2272,7 +2286,9 @@ export default function App() {
 						<span className="group-title">Label rotation</span>
 						<div className="curve-row">
 							<button onClick={rotateEdgeLabelCW}>↻ +90°</button>
-							<button onClick={() => dispatch({ type: "SET_EDGE_LABEL_ROT", id: selectedEdge.id, rot: 0 })}>Reset</button>
+							<button onClick={() => dispatch({ type: "SET_EDGE_LABEL_ROT", id: selectedEdge.id, rot: 0 })}>
+								Reset
+							</button>
 						</div>
 						{selectedEdge.from !== selectedEdge.to && (
 							<>
@@ -2366,7 +2382,9 @@ export default function App() {
 						<span className="group-title">Label rotation</span>
 						<div className="curve-row">
 							<button onClick={rotateLineLabelCW}>↻ +90°</button>
-							<button onClick={() => dispatch({ type: "SET_LINE_LABEL_ROT", id: selectedLineId, rot: 0 })}>Reset</button>
+							<button onClick={() => dispatch({ type: "SET_LINE_LABEL_ROT", id: selectedLineId, rot: 0 })}>
+								Reset
+							</button>
 						</div>
 						<span className="group-title">Label position</span>
 						<div className="curve-row">
@@ -2518,7 +2536,9 @@ export default function App() {
 						<span className="group-title">Label rotation</span>
 						<div className="curve-row">
 							<button onClick={rotateTextLabelCW}>↻ +90°</button>
-							<button onClick={() => dispatch({ type: "SET_TEXT_LABEL_ROT", id: selectedText.id, rot: 0 })}>Reset</button>
+							<button onClick={() => dispatch({ type: "SET_TEXT_LABEL_ROT", id: selectedText.id, rot: 0 })}>
+								Reset
+							</button>
 						</div>
 						<span className="group-title">Move (1/4 cell)</span>
 						<div className="dpad">
