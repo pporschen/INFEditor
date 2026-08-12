@@ -2937,7 +2937,17 @@ export default function App() {
 							>
 								Row +
 							</button>
-							<button onClick={() => dispatch({ type: "TABLE_ROWS", id: selectedTable.id, delta: -1 })}>Row −</button>
+							<button
+								onClick={() => {
+									const selectedCell = cellSel?.id === selectedTable.id ? cellSel : null;
+									dispatch({ type: "TABLE_ROWS", id: selectedTable.id, delta: -1, after: selectedCell?.row });
+									if (selectedCell && selectedTable.rows > 1) {
+										setCellSel({ ...selectedCell, row: Math.min(selectedCell.row, selectedTable.rows - 2) });
+									}
+								}}
+							>
+								Row −
+							</button>
 							{selectedTable.checkCol != null ? (
 								<>
 									<button onClick={() => dispatch({ type: "QM_VARS", id: selectedTable.id, delta: 1 })}>Var +</button>
@@ -2957,7 +2967,15 @@ export default function App() {
 									>
 										Col +
 									</button>
-									<button onClick={() => dispatch({ type: "TABLE_COLS", id: selectedTable.id, delta: -1 })}>
+									<button
+										onClick={() => {
+											const selectedCell = cellSel?.id === selectedTable.id ? cellSel : null;
+											dispatch({ type: "TABLE_COLS", id: selectedTable.id, delta: -1, after: selectedCell?.col });
+											if (selectedCell && selectedTable.cols > 1) {
+												setCellSel({ ...selectedCell, col: Math.min(selectedCell.col, selectedTable.cols - 2) });
+											}
+										}}
+									>
 										Col −
 									</button>
 								</>

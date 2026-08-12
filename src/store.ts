@@ -420,6 +420,55 @@ function docReducer(doc: Doc, a: Action): Doc {
 						}
 						return out;
 					};
+					if (a.delta < 0 && a.after != null) {
+						if (t.rows <= 1) return t;
+						const removeAt = Math.max(0, Math.min(t.rows - 1, a.after));
+						const shiftRows = (arr?: number[]) =>
+							arr?.filter((n) => n !== removeAt).map((n) => (n > removeAt ? n - 1 : n));
+						const shiftIndexMap = (src?: Record<string, string>) => {
+							const out: Record<string, string> = {};
+							for (const [key, value] of Object.entries(src ?? {})) {
+								const row = Number(key);
+								if (Number.isNaN(row) || row === removeAt) continue;
+								out[String(row > removeAt ? row - 1 : row)] = value;
+							}
+							return out;
+						};
+						const shiftCellMap = (src?: Record<string, string>) => {
+							const out: Record<string, string> = {};
+							for (const [key, value] of Object.entries(src ?? {})) {
+								const [rowText, col] = key.split(":");
+								const row = Number(rowText);
+								if (Number.isNaN(row) || row === removeAt) continue;
+								out[`${row > removeAt ? row - 1 : row}:${col}`] = value;
+							}
+							return out;
+						};
+						const struck = (t.struck ?? []).flatMap((key) => {
+							const [rowText, col] = key.split(":");
+							const row = Number(rowText);
+							if (row === removeAt) return [];
+							return [`${row > removeAt ? row - 1 : row}:${col}`];
+						});
+						const loops = t.loops
+							?.filter((loop) => !(loop.r1 === removeAt && loop.r2 === removeAt))
+							.map((loop) => ({
+								...loop,
+								r1: loop.r1 > removeAt ? loop.r1 - 1 : loop.r1,
+								r2: loop.r2 >= removeAt ? loop.r2 - 1 : loop.r2,
+							}));
+						return {
+							...t,
+							rows: t.rows - 1,
+							cells: t.cells.filter((_, row) => row !== removeAt),
+							struck,
+							boldRows: shiftRows(t.boldRows),
+							hlRows: shiftRows(t.hlRows),
+							rowColors: shiftIndexMap(t.rowColors),
+							cellColors: shiftCellMap(t.cellColors),
+							loops,
+						};
+					}
 					if (a.delta > 0 && a.after != null) {
 						const add = a.delta;
 						const insertAt = Math.max(0, Math.min(t.rows, a.after + 1));
@@ -491,6 +540,60 @@ function docReducer(doc: Doc, a: Action): Doc {
 						}
 						return out;
 					};
+					if (a.delta < 0 && a.after != null) {
+						if (t.cols <= 1) return t;
+						const removeAt = Math.max(0, Math.min(t.cols - 1, a.after));
+						const shiftCols = (arr?: number[]) =>
+							arr?.filter((n) => n !== removeAt).map((n) => (n > removeAt ? n - 1 : n));
+						const shiftIndexMap = (src?: Record<string, string>) => {
+							const out: Record<string, string> = {};
+							for (const [key, value] of Object.entries(src ?? {})) {
+								const col = Number(key);
+								if (Number.isNaN(col) || col === removeAt) continue;
+								out[String(col > removeAt ? col - 1 : col)] = value;
+							}
+							return out;
+						};
+						const shiftCellMap = (src?: Record<string, string>) => {
+							const out: Record<string, string> = {};
+							for (const [key, value] of Object.entries(src ?? {})) {
+								const [row, colText] = key.split(":");
+								const col = Number(colText);
+								if (Number.isNaN(col) || col === removeAt) continue;
+								out[`${row}:${col > removeAt ? col - 1 : col}`] = value;
+							}
+							return out;
+						};
+						const struck = (t.struck ?? []).flatMap((key) => {
+							const [row, colText] = key.split(":");
+							const col = Number(colText);
+							if (col === removeAt) return [];
+							return [`${row}:${col > removeAt ? col - 1 : col}`];
+						});
+						const loops = t.loops
+							?.filter((loop) => !(loop.c1 === removeAt && loop.c2 === removeAt))
+							.map((loop) => ({
+								...loop,
+								c1: loop.c1 > removeAt ? loop.c1 - 1 : loop.c1,
+								c2: loop.c2 >= removeAt ? loop.c2 - 1 : loop.c2,
+							}));
+						const cols = t.cols - 1;
+						const inputCols = t.inputCols
+							? Math.min(t.inputCols - (removeAt < t.inputCols ? 1 : 0), cols)
+							: t.inputCols;
+						return {
+							...t,
+							cols,
+							cells: t.cells.map((row) => row.filter((_, col) => col !== removeAt)),
+							inputCols,
+							struck,
+							boldCols: shiftCols(t.boldCols),
+							hlCols: shiftCols(t.hlCols),
+							colColors: shiftIndexMap(t.colColors),
+							cellColors: shiftCellMap(t.cellColors),
+							loops,
+						};
+					}
 					if (a.delta > 0 && a.after != null) {
 						const add = a.delta;
 						const insertAt = Math.max(0, Math.min(t.cols, a.after + 1));
