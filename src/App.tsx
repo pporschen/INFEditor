@@ -23,6 +23,7 @@ import type {
 
 const STORAGE_KEY = "infeditor.doc.v1";
 const WORKSPACE_KEY = "infeditor.workspace.v1";
+const PRINT_IDENTITY_KEY = "infeditor.printIdentity.v1";
 const CURVE_STEP = 24; // pixels of bow added per button press
 const CURVE_MAX = 168; // clamp so arcs stay reasonable
 const LOOP_SIZE_MIN = -18; // clamp for self-loop extra size (keeps a visible loop)
@@ -285,7 +286,6 @@ export default function App() {
 	const [aspect, setAspect] = useState(H / W); // canvas height/width, keeps the grid full-bleed
 	const [labelScale, setLabelScale] = useState(1.4);
 	const [tablePreset, setTablePreset] = useState<TablePreset>("blank");
-	const [tablesJumpOpen, setTablesJumpOpen] = useState(false);
 	const [kvSetup, setKvSetup] = useState<{
 		id: string;
 		x: number;
@@ -300,6 +300,20 @@ export default function App() {
 		col: number;
 	} | null>(null);
 	const [tableColor, setTableColor] = useState("#f59e0b");
+	const [printIdentity, setPrintIdentity] = useState(() => {
+		try {
+			const saved = JSON.parse(localStorage.getItem(PRINT_IDENTITY_KEY) ?? "{}") as {
+				name?: unknown;
+				studentNumber?: unknown;
+			};
+			return {
+				name: typeof saved.name === "string" ? saved.name : "",
+				studentNumber: typeof saved.studentNumber === "string" ? saved.studentNumber : "",
+			};
+		} catch {
+			return { name: "", studentNumber: "" };
+		}
+	});
 	const [derivStep, setDerivStep] = useState<number | null>(null);
 	const [derivField, setDerivField] = useState<DerivField>("expr");
 	const [loopMode, setLoopMode] = useState(false); // marking a KV group loop
@@ -337,6 +351,10 @@ export default function App() {
 		const active = tabs.find((t) => t.id === activeTabId);
 		if (active) localStorage.setItem(STORAGE_KEY, JSON.stringify(active.doc));
 	}, [tabs, activeTabId]);
+
+	useEffect(() => {
+		localStorage.setItem(PRINT_IDENTITY_KEY, JSON.stringify(printIdentity));
+	}, [printIdentity]);
 
 	// track the canvas aspect ratio so the viewBox matches it (no letterboxing)
 	useEffect(() => {
@@ -381,7 +399,6 @@ export default function App() {
 		setHoverCell(null);
 		setLoopMode(false);
 		setLoopFirst(null);
-		setTablesJumpOpen(false);
 		setExpandedEditor(null);
 		endMultiSelect();
 		resetView();
@@ -535,6 +552,20 @@ export default function App() {
 		setView((v) => ({ ...v, x: v.x + v.w * fx, y: v.y + v.w * aspect * fy }));
 	}
 
+	function scrollCanvas(e: React.WheelEvent<HTMLElement>) {
+		if ((e.target as Element).closest(".bottom-dock, .editor-modal-backdrop")) return;
+		e.preventDefault();
+		const rect = e.currentTarget.getBoundingClientRect();
+		if (rect.width <= 0 || rect.height <= 0) return;
+		const horizontal = e.shiftKey && e.deltaX === 0 ? e.deltaY : e.deltaX;
+		const vertical = e.shiftKey && e.deltaX === 0 ? 0 : e.deltaY;
+		setView((v) => ({
+			...v,
+			x: v.x + (horizontal * v.w) / rect.width,
+			y: v.y + (vertical * v.w * aspect) / rect.height,
+		}));
+	}
+
 	// zoom around the view center; factor > 1 zooms out
 	function zoomBy(factor: number) {
 		setView((v) => {
@@ -571,31 +602,6 @@ export default function App() {
 		}
 		return best;
 	}, [view.y, view.w, aspect, doc.pages]);
-
-	// short type label for the quick-jump table list
-	function tableLabel(tb: DiagTable): string {
-		if (tb.checkCol != null) return "QM comb.";
-		if (tb.pi) return "PI chart";
-		if (tb.kv) return `KV ${tb.kv}`;
-		if (tb.inputCols != null) return "Truth";
-		return "Table";
-	}
-
-	// pan the view to center a table and select it — one dwell to jump there,
-	// keeping the current zoom level (no re-fit)
-	function focusTable(tb: DiagTable) {
-		const bw = tb.cols * tb.cw * GRID;
-		const bh = tb.rows * GRID;
-		setView((v) => ({
-			x: tb.x * GRID + bw / 2 - v.w / 2,
-			y: tb.y * GRID + bh / 2 - (v.w * aspect) / 2,
-			w: v.w,
-		}));
-		setMode("select");
-		setSelection({ kind: "table", id: tb.id });
-		setCellSel(null);
-		returnModeRef.current = null;
-	}
 
 	// Import a LaTeX tabular from the clipboard into an editable table.
 	function importLatexTable() {
@@ -1127,13 +1133,12 @@ export default function App() {
 		dispatch({ type: "SET_LINE_LABEL_POS", id, pos });
 	}
 
-	// nudge the selected node (used for junction dots) by a fraction of a cell
-	// move the selected table cell's row up (-1) or down (+1); header row stays
+	// Move the selected table cell's row up (-1) or down (+1). Header styling
+	// belongs to position 1, so rows can move through that position.
 	function moveRow(dir: number) {
 		if (!cellSel || !selectedTable) return;
-		const firstMovable = selectedTable.header ? 1 : 0;
 		const r2 = cellSel.row + dir;
-		if (cellSel.row < firstMovable || r2 < firstMovable || r2 >= selectedTable.rows) return;
+		if (r2 < 0 || r2 >= selectedTable.rows) return;
 		dispatch({ type: "MOVE_ROW", id: selectedTable.id, row: cellSel.row, dir });
 		setCellSel({ ...cellSel, row: r2 });
 	}
@@ -1397,10 +1402,10 @@ export default function App() {
 		}
 	}
 
-	// Spreadsheet-style navigation while editing a table cell.
-	// In a math table, convert a trailing operator word when leaving the cell.
+	// Spreadsheet-style navigation while editing a table cell. Convert Boolean
+	// operator shortcuts in every table; Math controls LaTeX export wrapping only.
 	function finalizeCell() {
-		if (!selectedTable || !cellSel || !selectedTable.math) return;
+		if (!selectedTable || !cellSel) return;
 		const cur = selectedTable.cells[cellSel.row]?.[cellSel.col] ?? "";
 		const fin = boolConvert(cur, true);
 		if (fin !== cur)
@@ -1814,25 +1819,6 @@ export default function App() {
 					</div>
 				</div>
 
-				{doc.tables.length > 0 && (
-					<div className="group">
-						<button className="group-toggle" onClick={() => setTablesJumpOpen((v) => !v)}>
-							<span>Tables — jump to ({doc.tables.length})</span>
-							<span>{tablesJumpOpen ? "▾" : "▸"}</span>
-						</button>
-						{tablesJumpOpen &&
-							doc.tables.map((tb, i) => (
-								<button
-									key={tb.id}
-									className={selection?.kind === "table" && selection.id === tb.id ? "active" : ""}
-									onClick={() => focusTable(tb)}
-								>
-									{i + 1} · {tableLabel(tb)}
-								</button>
-							))}
-					</div>
-				)}
-
 				<div className="group">
 					<span className="group-title">View (pan / zoom)</span>
 					<div className="dpad">
@@ -1890,6 +1876,20 @@ export default function App() {
 
 				<div className="group">
 					<span className="group-title">File · export</span>
+					<label>
+						PDF name (optional)
+						<input
+							value={printIdentity.name}
+							onChange={(e) => setPrintIdentity((prev) => ({ ...prev, name: e.target.value }))}
+						/>
+					</label>
+					<label>
+						Student number (optional)
+						<input
+							value={printIdentity.studentNumber}
+							onChange={(e) => setPrintIdentity((prev) => ({ ...prev, studentNumber: e.target.value }))}
+						/>
+					</label>
 					<div className="btn-grid">
 						<button onClick={saveFile} title="Save the editable diagram to a .json file">
 							Save
@@ -1898,7 +1898,7 @@ export default function App() {
 							Open…
 						</button>
 						<button
-							onClick={() => svgRef.current && printA4(svgRef.current, doc.pages)}
+							onClick={() => svgRef.current && printA4(svgRef.current, doc.pages, printIdentity)}
 							title="Print all pages to A4 PDF"
 						>
 							Print PDF
@@ -1957,7 +1957,7 @@ export default function App() {
 				</div>
 			</aside>
 
-			<main className="stage">
+			<main className="stage" onWheel={scrollCanvas}>
 				<Canvas
 					ref={svgRef}
 					doc={doc}
@@ -2701,7 +2701,7 @@ export default function App() {
 											id: selectedTable.id,
 											row: cellSel.row,
 											col: cellSel.col,
-											text: selectedTable.math ? boolConvert(e.target.value, false) : e.target.value,
+											text: boolConvert(e.target.value, false),
 										})
 									}
 									onKeyDown={handleCellKey}
@@ -2722,7 +2722,7 @@ export default function App() {
 													id: selectedTable.id,
 													row: cellSel.row,
 													col: cellSel.col,
-													text: selectedTable.math ? boolConvert(value, false) : value,
+													text: boolConvert(value, false),
 												}),
 										)
 									}
@@ -2908,11 +2908,11 @@ export default function App() {
 								</div>
 							</>
 						)}
-						{cellSel && cellSel.id === selectedTable.id && cellSel.row >= (selectedTable.header ? 1 : 0) && (
+						{cellSel && cellSel.id === selectedTable.id && (
 							<>
 								<span className="group-title">Move row</span>
 								<div className="curve-row">
-									<button onClick={() => moveRow(-1)} disabled={cellSel.row <= (selectedTable.header ? 1 : 0)}>
+									<button onClick={() => moveRow(-1)} disabled={cellSel.row <= 0}>
 										↑
 									</button>
 									<button onClick={() => moveRow(1)} disabled={cellSel.row >= selectedTable.rows - 1}>

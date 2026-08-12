@@ -37,6 +37,24 @@ const OP: Record<string, string> = {
 	ss: "ß",
 };
 
+const BINARY_OPS = new Set([
+	"cdot",
+	"oplus",
+	"lor",
+	"vee",
+	"land",
+	"wedge",
+	"leftarrow",
+	"Leftarrow",
+	"Rightarrow",
+	"implies",
+	"Leftrightarrow",
+	"iff",
+	"neq",
+	"equiv",
+]);
+const MATH_SPACE = "\u2002";
+
 // LaTeX diaeresis accent (\"a, \"{o}, …) → the precomposed umlaut for display,
 // while the source stays pure LaTeX for export. Falls back to a combining mark.
 const UMLAUT: Record<string, string> = {
@@ -72,6 +90,7 @@ export function renderRich(s: string): ReactNode {
 	let buf = "";
 	let key = 0;
 	let i = 0;
+	const usesMathMarkup = /[\\_^{}]/.test(s);
 	const flush = () => {
 		if (buf) {
 			out.push(buf);
@@ -99,6 +118,11 @@ export function renderRich(s: string): ReactNode {
 	};
 	while (i < s.length) {
 		const ch = s[i];
+		if (usesMathMarkup && (ch === " " || ch === "\t")) {
+			while (s[i] === " " || s[i] === "\t") i++;
+			buf += MATH_SPACE;
+			continue;
+		}
 		if (ch === "\\") {
 			// LaTeX diaeresis accent: \"a or \"{a} → umlaut glyph for display
 			if (s[i + 1] === '"') {
@@ -143,7 +167,7 @@ export function renderRich(s: string): ReactNode {
 					// delimiter sizing hint — keep the bracket, drop an invisible '.'
 					if (s[i] === ".") i++;
 				} else {
-					buf += OP[cmd];
+					buf += BINARY_OPS.has(cmd) ? `${MATH_SPACE}${OP[cmd]}${MATH_SPACE}` : OP[cmd];
 				}
 				continue;
 			}

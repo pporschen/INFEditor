@@ -561,16 +561,15 @@ function docReducer(doc: Doc, a: Action): Doc {
 				}),
 			};
 		case "MOVE_ROW":
-			// swap a body row with its neighbour; the header row (0) stays put and
-			// strikethroughs travel with their row.
+			// Swap a row with its neighbour. Header styling belongs to position 0,
+			// so rows may move through it when a table has multiple heading rows.
 			return {
 				...doc,
 				tables: doc.tables.map((t) => {
 					if (t.id !== a.id) return t;
 					const r = a.row;
 					const r2 = r + a.dir;
-					const firstMovable = t.header ? 1 : 0;
-					if (r < firstMovable || r2 < firstMovable || r >= t.rows || r2 >= t.rows) return t;
+					if (r < 0 || r2 < 0 || r >= t.rows || r2 >= t.rows) return t;
 					const cells = t.cells.map((row) => row.slice());
 					[cells[r], cells[r2]] = [cells[r2], cells[r]];
 					const struck = (t.struck ?? []).map((k) => {
