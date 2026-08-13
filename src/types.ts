@@ -124,7 +124,12 @@ export interface DerivStep {
 	reason: string;
 }
 
-// A pasted image (PNG data URL) placed on the canvas.
+export type ImageAnnotation =
+	| { id: string; kind: "line"; x1: number; y1: number; x2: number; y2: number }
+	| { id: string; kind: "text"; x: number; y: number; text: string; size?: number };
+
+// A pasted image (PNG data URL) placed on the canvas. Annotation coordinates
+// are normalized to its bounds, so they follow image movement and resizing.
 export interface DiagImage {
 	id: string;
 	x: number; // top-left grid column
@@ -132,6 +137,7 @@ export interface DiagImage {
 	w: number; // width in grid cells
 	h: number; // height in grid cells
 	dataUrl: string; // base64 PNG data URL
+	annotations?: ImageAnnotation[];
 }
 
 // A multi-line derivation → exports to a LaTeX align* block. Formatting only.

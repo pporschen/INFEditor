@@ -321,6 +321,11 @@ interface Props {
 	onLineClick: (id: string) => void;
 	onTextClick: (id: string) => void;
 	onImageClick: (id: string) => void;
+	imageAnnotateMode: "line" | "text" | null;
+	pendingImagePoint: { imageId: string; x: number; y: number } | null;
+	selectedImageAnnotationId: string | null;
+	onImagePointClick: (id: string, x: number, y: number) => void;
+	onImageAnnotationClick: (imageId: string, annotationId: string) => void;
 	onTextCaret: (id: string, offset: number) => void;
 	cellSel: { id: string; row: number; col: number } | null;
 	loopFirst: { id: string; row: number; col: number } | null;
@@ -350,6 +355,11 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 		onLineClick,
 		onTextClick,
 		onImageClick,
+		imageAnnotateMode,
+		pendingImagePoint,
+		selectedImageAnnotationId,
+		onImagePointClick,
+		onImageAnnotationClick,
 		onTextCaret,
 		cellSel,
 		loopFirst,
@@ -420,6 +430,20 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 	function handleBgMove(e: React.MouseEvent<SVGRectElement>) {
 		const c = toCell(e);
 		if (c) onBgMove(c.gx, c.gy);
+	}
+
+	function imagePoint(e: React.MouseEvent<SVGImageElement>, px: number, py: number, pw: number, ph: number) {
+		const svg = e.currentTarget.ownerSVGElement;
+		const ctm = svg?.getScreenCTM();
+		if (!svg || !ctm) return null;
+		const point = svg.createSVGPoint();
+		point.x = e.clientX;
+		point.y = e.clientY;
+		const local = point.matrixTransform(ctm.inverse());
+		return {
+			x: Math.max(0, Math.min(1, (local.x - px) / pw)),
+			y: Math.max(0, Math.min(1, (local.y - py) / ph)),
+		};
 	}
 
 	return (
@@ -1304,9 +1328,72 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 								width={pw}
 								height={ph}
 								className={`diagram-image${selected ? " selected" : ""}`}
-								onClick={() => onImageClick(img.id)}
+								onClick={(event) => {
+									event.stopPropagation();
+									if (imageAnnotateMode && selected) {
+										const point = imagePoint(event, px, py, pw, ph);
+										if (point) onImagePointClick(img.id, point.x, point.y);
+										return;
+									}
+									onImageClick(img.id);
+								}}
 								{...hitProps}
 							/>
+							<g pointerEvents={imageAnnotateMode ? "none" : undefined}>
+								{(img.annotations ?? []).map((annotation) => {
+									const annotationSelected = selected && selectedImageAnnotationId === annotation.id;
+									if (annotation.kind === "line") {
+										const x1 = px + annotation.x1 * pw;
+										const y1 = py + annotation.y1 * ph;
+										const x2 = px + annotation.x2 * pw;
+										const y2 = py + annotation.y2 * ph;
+										return (
+											<g
+												key={annotation.id}
+												onClick={(event) => {
+													event.stopPropagation();
+													onImageAnnotationClick(img.id, annotation.id);
+												}}
+											>
+												<line x1={x1} y1={y1} x2={x2} y2={y2} className="image-annotation-hit" />
+												<line
+													x1={x1}
+													y1={y1}
+													x2={x2}
+													y2={y2}
+													className={`image-annotation-line${annotationSelected ? " selected" : ""}`}
+												/>
+											</g>
+										);
+									}
+									const x = px + annotation.x * pw;
+									const y = py + annotation.y * ph;
+									return (
+										<text
+											key={annotation.id}
+											x={x}
+											y={y}
+											className={`image-annotation-text${annotationSelected ? " selected" : ""}${annotation.text ? "" : " placeholder"}`}
+											style={{ fontSize: `calc(${16 * (annotation.size ?? 1)}px * var(--label-scale, 1))` }}
+											onClick={(event) => {
+												event.stopPropagation();
+												onImageAnnotationClick(img.id, annotation.id);
+											}}
+										>
+											{annotation.text || "Text…"}
+										</text>
+									);
+								})}
+							</g>
+							{pendingImagePoint?.imageId === img.id && (
+								<circle
+									cx={px + pendingImagePoint.x * pw}
+									cy={py + pendingImagePoint.y * ph}
+									r={6}
+									className="ui-only image-annotation-point"
+									pointerEvents="none"
+								/>
+							)}
 							{selected && (
 								<rect x={px} y={py} width={pw} height={ph} className="ui-only selection-outline" pointerEvents="none" />
 							)}

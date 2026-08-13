@@ -125,6 +125,22 @@ export function applyLightStyles(root: Element, ls: number) {
 		"stroke-linejoin": "round",
 		"font-family": "sans-serif",
 	});
+	setStyle(root, ".image-annotation-line", {
+		stroke: "#e11d48",
+		"stroke-width": "3",
+		"stroke-linecap": "round",
+		fill: "none",
+	});
+	setStyle(root, ".image-annotation-text", {
+		fill: "#e11d48",
+		"font-weight": "700",
+		"font-family": "sans-serif",
+		"dominant-baseline": "central",
+		"paint-order": "stroke",
+		stroke: LIGHT.bg,
+		"stroke-width": "4",
+		"stroke-linejoin": "round",
+	});
 }
 
 export function exportPng(svg: SVGSVGElement, filename = "diagram.png") {
@@ -154,7 +170,7 @@ export function exportPng(svg: SVGSVGElement, filename = "diagram.png") {
 	// drop editor-only decorations, the grid, and empty-text placeholders
 	clone.querySelectorAll(".ui-only").forEach((el) => el.remove());
 	clone.querySelectorAll(".grid-line, .grid-minor").forEach((el) => el.remove());
-	clone.querySelectorAll(".free-text.placeholder").forEach((el) => el.remove());
+	clone.querySelectorAll(".free-text.placeholder, .image-annotation-text.placeholder").forEach((el) => el.remove());
 	clone.querySelectorAll(".selected").forEach((el) => el.classList.remove("selected"));
 
 	// make the white background cover the exported region

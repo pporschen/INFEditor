@@ -508,7 +508,52 @@ button.active kbd {
 }
 .diagram-image.selected {
   opacity: 1;
-  filter: brightness(1.1);
+}
+.selection-outline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-dasharray: 8 5;
+}
+.image-annotation-line {
+  stroke: #e11d48;
+  stroke-width: 3;
+  stroke-linecap: round;
+  fill: none;
+  pointer-events: none;
+}
+.image-annotation-line.selected {
+  stroke: var(--accent);
+  stroke-width: 4;
+}
+.image-annotation-hit {
+  stroke: transparent;
+  stroke-width: 18;
+  fill: none;
+  cursor: pointer;
+}
+.image-annotation-text {
+  fill: #e11d48;
+  font-weight: 700;
+  font-family: sans-serif;
+  dominant-baseline: central;
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 4;
+  stroke-linejoin: round;
+  cursor: pointer;
+}
+.image-annotation-text.selected {
+  fill: var(--accent);
+}
+.image-annotation-text.placeholder {
+  opacity: 0.72;
+  font-style: italic;
+}
+.image-annotation-point {
+  fill: #e11d48;
+  stroke: #ffffff;
+  stroke-width: 2;
 }
 
 /* edges */

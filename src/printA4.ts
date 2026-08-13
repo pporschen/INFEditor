@@ -43,7 +43,7 @@ export function printA4(svg: SVGSVGElement, pages: number, identity?: PrintIdent
 		// the diagram content (clipped to the page by the svg viewport)
 		const c = content.cloneNode(true) as Element;
 		c.querySelectorAll(".ui-only").forEach((el) => el.remove());
-		c.querySelectorAll(".free-text.placeholder").forEach((el) => el.remove());
+		c.querySelectorAll(".free-text.placeholder, .image-annotation-text.placeholder").forEach((el) => el.remove());
 		c.querySelectorAll(".selected").forEach((el) => el.classList.remove("selected"));
 		psvg.appendChild(c);
 

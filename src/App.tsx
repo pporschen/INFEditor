@@ -281,6 +281,9 @@ export default function App() {
 	const [pendingFrom, setPendingFrom] = useState<string | null>(null);
 	const [pendingCorner, setPendingCorner] = useState<{ x: number; y: number } | null>(null);
 	const [pendingImage, setPendingImage] = useState<string | null>(null); // base64 PNG data URL after paste
+	const [imageAnnotateMode, setImageAnnotateMode] = useState<"line" | "text" | null>(null);
+	const [pendingImagePoint, setPendingImagePoint] = useState<{ imageId: string; x: number; y: number } | null>(null);
+	const [selectedImageAnnotationId, setSelectedImageAnnotationId] = useState<string | null>(null);
 	const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
 	const [view, setView] = useState({ x: -GRID, y: -GRID, w: DEFAULT_VIEW_W });
 	const [aspect, setAspect] = useState(H / W); // canvas height/width, keeps the grid full-bleed
@@ -396,6 +399,9 @@ export default function App() {
 		setDerivStep(null);
 		setPendingFrom(null);
 		setPendingCorner(null);
+		setImageAnnotateMode(null);
+		setPendingImagePoint(null);
+		setSelectedImageAnnotationId(null);
 		setHoverCell(null);
 		setLoopMode(false);
 		setLoopFirst(null);
@@ -530,6 +536,8 @@ export default function App() {
 	const selectedText = selection?.kind === "text" ? (doc.texts.find((t) => t.id === selection.id) ?? null) : null;
 	const selectedImage =
 		selection?.kind === "image" ? (doc.images.find((img) => img.id === selection.id) ?? null) : null;
+	const selectedImageAnnotation =
+		selectedImage?.annotations?.find((annotation) => annotation.id === selectedImageAnnotationId) ?? null;
 	const selectedTable = selection?.kind === "table" ? (doc.tables.find((t) => t.id === selection.id) ?? null) : null;
 	const selectedDeriv =
 		selection?.kind === "deriv" ? (doc.derivations.find((d) => d.id === selection.id) ?? null) : null;
@@ -539,6 +547,9 @@ export default function App() {
 		setMode(m);
 		setPendingFrom(null);
 		setPendingCorner(null);
+		setImageAnnotateMode(null);
+		setPendingImagePoint(null);
+		setSelectedImageAnnotationId(null);
 		setHoverCell(null);
 		setSelection(null);
 		setLoopMode(false);
@@ -546,6 +557,21 @@ export default function App() {
 		setMultiMode(false); // any tool click ends group multi-select
 		setMulti([]);
 	}, []);
+
+	useEffect(() => {
+		if (selection?.kind === "image") return;
+		setImageAnnotateMode(null);
+		setPendingImagePoint(null);
+		setSelectedImageAnnotationId(null);
+	}, [selection]);
+
+	useEffect(() => {
+		if (selectedImageAnnotation?.kind !== "text") return;
+		requestAnimationFrame(() => {
+			labelInputRef.current?.focus();
+			labelInputRef.current?.select();
+		});
+	}, [selectedImageAnnotation?.id]);
 
 	// pan by a fraction of the visible area (so it scales with zoom)
 	function panBy(fx: number, fy: number) {
@@ -917,10 +943,55 @@ export default function App() {
 		if (mode === "select") {
 			returnModeRef.current = null;
 			setSelection({ kind: "image", id });
+			setSelectedImageAnnotationId(null);
+			setImageAnnotateMode(null);
+			setPendingImagePoint(null);
 		} else if (mode === "delete") {
 			dispatch({ type: "DELETE_IMAGE", id });
 			setSelection(null);
 		}
+	}
+
+	function startImageAnnotation(kind: "line" | "text") {
+		setImageAnnotateMode((current) => (current === kind ? null : kind));
+		setPendingImagePoint(null);
+		setSelectedImageAnnotationId(null);
+	}
+
+	function handleImagePointClick(id: string, x: number, y: number) {
+		if (!selectedImage || selectedImage.id !== id || !imageAnnotateMode) return;
+		if (imageAnnotateMode === "text") {
+			const annotationId = crypto.randomUUID();
+			dispatch({ type: "ADD_IMAGE_TEXT", id, annotationId, x, y });
+			setSelectedImageAnnotationId(annotationId);
+			setImageAnnotateMode(null);
+			return;
+		}
+		if (!pendingImagePoint || pendingImagePoint.imageId !== id) {
+			setPendingImagePoint({ imageId: id, x, y });
+			return;
+		}
+		if (pendingImagePoint.x === x && pendingImagePoint.y === y) return;
+		const annotationId = crypto.randomUUID();
+		dispatch({
+			type: "ADD_IMAGE_LINE",
+			id,
+			annotationId,
+			x1: pendingImagePoint.x,
+			y1: pendingImagePoint.y,
+			x2: x,
+			y2: y,
+		});
+		setPendingImagePoint(null);
+		setSelectedImageAnnotationId(annotationId);
+	}
+
+	function handleImageAnnotationClick(imageId: string, annotationId: string) {
+		setMode("select");
+		setSelection({ kind: "image", id: imageId });
+		setImageAnnotateMode(null);
+		setPendingImagePoint(null);
+		setSelectedImageAnnotationId(annotationId);
 	}
 
 	function handleCellClick(id: string, row: number, col: number) {
@@ -1631,7 +1702,11 @@ export default function App() {
 					else if (selection?.kind === "edge") dispatch({ type: "DELETE_EDGE", id: selection.id });
 					else if (selection?.kind === "line") dispatch({ type: "DELETE_LINE", id: selection.id });
 					else if (selection?.kind === "text") dispatch({ type: "DELETE_TEXT", id: selection.id });
-					else if (selection?.kind === "image") dispatch({ type: "DELETE_IMAGE", id: selection.id });
+					else if (selection?.kind === "image" && selectedImageAnnotationId) {
+						dispatch({ type: "DELETE_IMAGE_ANNOTATION", id: selection.id, annotationId: selectedImageAnnotationId });
+						setSelectedImageAnnotationId(null);
+						return;
+					} else if (selection?.kind === "image") dispatch({ type: "DELETE_IMAGE", id: selection.id });
 					else if (selection?.kind === "table") dispatch({ type: "DELETE_TABLE", id: selection.id });
 					else if (selection?.kind === "deriv") dispatch({ type: "DELETE_DERIV", id: selection.id });
 					setSelection(null);
@@ -1642,7 +1717,7 @@ export default function App() {
 		}
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [changeMode, dispatch, selection]);
+	}, [changeMode, dispatch, selection, selectedImageAnnotationId]);
 
 	return (
 		<div className="app">
@@ -1978,6 +2053,11 @@ export default function App() {
 					onLineClick={handleLineClick}
 					onTextClick={handleTextClick}
 					onImageClick={handleImageClick}
+					imageAnnotateMode={imageAnnotateMode}
+					pendingImagePoint={pendingImagePoint}
+					selectedImageAnnotationId={selectedImageAnnotationId}
+					onImagePointClick={handleImagePointClick}
+					onImageAnnotationClick={handleImageAnnotationClick}
 					onTextCaret={handleTextCaret}
 					cellSel={cellSel}
 					loopFirst={loopFirst}
@@ -2558,6 +2638,81 @@ export default function App() {
 				{selectedImage && (
 					<>
 						<span className="group-title">Image</span>
+						<span className="group-title">Annotations</span>
+						<div className="btn-grid">
+							<button
+								className={imageAnnotateMode === "line" ? "active" : ""}
+								onClick={() => startImageAnnotation("line")}
+							>
+								{imageAnnotateMode === "line" && pendingImagePoint ? "Line: end point" : "Draw line"}
+							</button>
+							<button
+								className={imageAnnotateMode === "text" ? "active" : ""}
+								onClick={() => startImageAnnotation("text")}
+							>
+								Add text
+							</button>
+						</div>
+						{selectedImageAnnotation?.kind === "text" && (
+							<>
+								<label>
+									Annotation text
+									<input
+										ref={attachLabel}
+										value={selectedImageAnnotation.text}
+										onChange={(event) =>
+											dispatch({
+												type: "SET_IMAGE_ANNOTATION_TEXT",
+												id: selectedImage.id,
+												annotationId: selectedImageAnnotation.id,
+												text: event.target.value,
+											})
+										}
+									/>
+								</label>
+								<div className="curve-row">
+									<button
+										onClick={() =>
+											dispatch({
+												type: "SET_IMAGE_ANNOTATION_SIZE",
+												id: selectedImage.id,
+												annotationId: selectedImageAnnotation.id,
+												delta: -0.2,
+											})
+										}
+									>
+										A−
+									</button>
+									<button
+										onClick={() =>
+											dispatch({
+												type: "SET_IMAGE_ANNOTATION_SIZE",
+												id: selectedImage.id,
+												annotationId: selectedImageAnnotation.id,
+												delta: 0.2,
+											})
+										}
+									>
+										A＋
+									</button>
+								</div>
+							</>
+						)}
+						{selectedImageAnnotation && (
+							<button
+								className="danger"
+								onClick={() => {
+									dispatch({
+										type: "DELETE_IMAGE_ANNOTATION",
+										id: selectedImage.id,
+										annotationId: selectedImageAnnotation.id,
+									});
+									setSelectedImageAnnotationId(null);
+								}}
+							>
+								Delete annotation
+							</button>
+						)}
 						<div className="dpad-row">
 							<label>
 								Position X (cells)

@@ -46,6 +46,11 @@ export type Action =
 	| { type: "ADD_IMAGE"; id: string; x: number; y: number; w: number; h: number; dataUrl: string }
 	| { type: "MOVE_IMAGE"; id: string; x: number; y: number }
 	| { type: "RESIZE_IMAGE"; id: string; w: number; h: number }
+	| { type: "ADD_IMAGE_LINE"; id: string; annotationId: string; x1: number; y1: number; x2: number; y2: number }
+	| { type: "ADD_IMAGE_TEXT"; id: string; annotationId: string; x: number; y: number }
+	| { type: "SET_IMAGE_ANNOTATION_TEXT"; id: string; annotationId: string; text: string }
+	| { type: "SET_IMAGE_ANNOTATION_SIZE"; id: string; annotationId: string; delta: number }
+	| { type: "DELETE_IMAGE_ANNOTATION"; id: string; annotationId: string }
 	| { type: "DELETE_IMAGE"; id: string }
 	| { type: "ADD_TABLE"; table: DiagTable }
 	| { type: "SET_TABLE_CELL"; id: string; row: number; col: number; text: string }
@@ -377,6 +382,77 @@ function docReducer(doc: Doc, a: Action): Doc {
 			return {
 				...doc,
 				images: doc.images.map((img) => (img.id === a.id ? { ...img, w: a.w, h: a.h } : img)),
+			};
+		case "ADD_IMAGE_LINE":
+			return {
+				...doc,
+				images: doc.images.map((img) =>
+					img.id === a.id
+						? {
+								...img,
+								annotations: [
+									...(img.annotations ?? []),
+									{ id: a.annotationId, kind: "line", x1: a.x1, y1: a.y1, x2: a.x2, y2: a.y2 },
+								],
+							}
+						: img,
+				),
+			};
+		case "ADD_IMAGE_TEXT":
+			return {
+				...doc,
+				images: doc.images.map((img) =>
+					img.id === a.id
+						? {
+								...img,
+								annotations: [
+									...(img.annotations ?? []),
+									{ id: a.annotationId, kind: "text", x: a.x, y: a.y, text: "", size: 1 },
+								],
+							}
+						: img,
+				),
+			};
+		case "SET_IMAGE_ANNOTATION_TEXT":
+			return {
+				...doc,
+				images: doc.images.map((img) =>
+					img.id === a.id
+						? {
+								...img,
+								annotations: (img.annotations ?? []).map((annotation) =>
+									annotation.id === a.annotationId && annotation.kind === "text"
+										? { ...annotation, text: a.text }
+										: annotation,
+								),
+							}
+						: img,
+				),
+			};
+		case "SET_IMAGE_ANNOTATION_SIZE":
+			return {
+				...doc,
+				images: doc.images.map((img) =>
+					img.id === a.id
+						? {
+								...img,
+								annotations: (img.annotations ?? []).map((annotation) =>
+									annotation.id === a.annotationId && annotation.kind === "text"
+										? { ...annotation, size: Math.max(0.6, Math.min(4, (annotation.size ?? 1) + a.delta)) }
+										: annotation,
+								),
+							}
+						: img,
+				),
+			};
+		case "DELETE_IMAGE_ANNOTATION":
+			return {
+				...doc,
+				images: doc.images.map((img) =>
+					img.id === a.id
+						? { ...img, annotations: (img.annotations ?? []).filter((annotation) => annotation.id !== a.annotationId) }
+						: img,
+				),
 			};
 		case "DELETE_IMAGE":
 			return { ...doc, images: doc.images.filter((img) => img.id !== a.id) };
