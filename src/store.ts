@@ -1,5 +1,6 @@
 import { useReducer } from "react";
 import { kvHeaderRow, kvHeaderCol } from "./kv";
+import { GRID, halfExtents } from "./geometry";
 import type {
 	Doc,
 	DiagNode,
@@ -51,6 +52,7 @@ export type Action =
 	| { type: "SET_IMAGE_ANNOTATION_TEXT"; id: string; annotationId: string; text: string }
 	| { type: "SET_IMAGE_ANNOTATION_SIZE"; id: string; annotationId: string; delta: number }
 	| { type: "DELETE_IMAGE_ANNOTATION"; id: string; annotationId: string }
+	| { type: "TRANSFORM_IMAGE"; id: string; rotationDelta?: number; scaleFactor?: number }
 	| { type: "DELETE_IMAGE"; id: string }
 	| { type: "ADD_TABLE"; table: DiagTable }
 	| { type: "SET_TABLE_CELL"; id: string; row: number; col: number; text: string }
@@ -78,6 +80,7 @@ export type Action =
 	| { type: "TOGGLE_TABLE_FORM"; id: string }
 	| { type: "FILL_TABLE_INPUTS"; id: string }
 	| { type: "MOVE_TABLE"; id: string; x: number; y: number }
+	| { type: "TRANSFORM_TABLE"; id: string; rotationDelta?: number; scaleFactor?: number }
 	| { type: "DELETE_TABLE"; id: string }
 	| { type: "ADD_TABLE_LOOP"; id: string; loop: TableLoop }
 	| { type: "SET_LOOP_LABEL"; id: string; loopId: string; label: string }
@@ -90,6 +93,14 @@ export type Action =
 	| { type: "DEL_DERIV_STEP"; id: string; index: number }
 	| { type: "MOVE_DERIV"; id: string; x: number; y: number }
 	| { type: "MOVE_MANY"; refs: { kind: string; id: string }[]; dx: number; dy: number }
+	| {
+			type: "TRANSFORM_MANY";
+			refs: { kind: string; id: string }[];
+			cx: number;
+			cy: number;
+			rotationDelta?: number;
+			scaleFactor?: number;
+	  }
 	| { type: "DELETE_DERIV"; id: string }
 	| { type: "SET_PAGES"; count: number }
 	| { type: "SET_DOC_NAME"; name: string }
@@ -451,6 +462,19 @@ function docReducer(doc: Doc, a: Action): Doc {
 				images: doc.images.map((img) =>
 					img.id === a.id
 						? { ...img, annotations: (img.annotations ?? []).filter((annotation) => annotation.id !== a.annotationId) }
+						: img,
+				),
+			};
+		case "TRANSFORM_IMAGE":
+			return {
+				...doc,
+				images: doc.images.map((img) =>
+					img.id === a.id
+						? {
+								...img,
+								rotation: (((((img.rotation ?? 0) + (a.rotationDelta ?? 0)) % 360) + 360) % 360) as 0 | 90 | 180 | 270,
+								scale: Math.max(0.25, Math.min(4, (img.scale ?? 1) * (a.scaleFactor ?? 1))),
+							}
 						: img,
 				),
 			};
@@ -907,6 +931,23 @@ function docReducer(doc: Doc, a: Action): Doc {
 				...doc,
 				tables: doc.tables.map((t) => (t.id === a.id ? { ...t, x: a.x, y: a.y } : t)),
 			};
+		case "TRANSFORM_TABLE":
+			return {
+				...doc,
+				tables: doc.tables.map((table) =>
+					table.id === a.id
+						? {
+								...table,
+								rotation: (((((table.rotation ?? 0) + (a.rotationDelta ?? 0)) % 360) + 360) % 360) as
+									| 0
+									| 90
+									| 180
+									| 270,
+								scale: Math.max(0.25, Math.min(4, (table.scale ?? 1) * (a.scaleFactor ?? 1))),
+							}
+						: table,
+				),
+			};
 		case "DELETE_TABLE":
 			return { ...doc, tables: doc.tables.filter((t) => t.id !== a.id) };
 		case "ADD_TABLE_LOOP":
@@ -1006,6 +1047,7 @@ function docReducer(doc: Doc, a: Action): Doc {
 			const lineIds = ids("line");
 			const textIds = ids("text");
 			const tableIds = ids("table");
+			const imageIds = ids("image");
 			const derivIds = ids("deriv");
 			const { dx, dy } = a;
 			return {
@@ -1016,7 +1058,108 @@ function docReducer(doc: Doc, a: Action): Doc {
 				),
 				texts: doc.texts.map((t) => (textIds.has(t.id) ? { ...t, x: t.x + dx, y: t.y + dy } : t)),
 				tables: doc.tables.map((t) => (tableIds.has(t.id) ? { ...t, x: t.x + dx, y: t.y + dy } : t)),
+				images: doc.images.map((image) =>
+					imageIds.has(image.id) ? { ...image, x: image.x + dx, y: image.y + dy } : image,
+				),
 				derivations: doc.derivations.map((d) => (derivIds.has(d.id) ? { ...d, x: d.x + dx, y: d.y + dy } : d)),
+			};
+		}
+		case "TRANSFORM_MANY": {
+			const ids = (kind: string) => new Set(a.refs.filter((ref) => ref.kind === kind).map((ref) => ref.id));
+			const nodeIds = ids("node");
+			const lineIds = ids("line");
+			const textIds = ids("text");
+			const tableIds = ids("table");
+			const imageIds = ids("image");
+			const derivIds = ids("deriv");
+			const angle = ((a.rotationDelta ?? 0) * Math.PI) / 180;
+			const factor = a.scaleFactor ?? 1;
+			const cos = Math.cos(angle);
+			const sin = Math.sin(angle);
+			const point = (x: number, y: number) => {
+				const dx = (x - a.cx) * factor;
+				const dy = (y - a.cy) * factor;
+				return { x: a.cx + dx * cos - dy * sin, y: a.cy + dx * sin + dy * cos };
+			};
+			const rotation = (value: number | undefined) =>
+				(((((value ?? 0) + (a.rotationDelta ?? 0)) % 360) + 360) % 360) as 0 | 90 | 180 | 270;
+			return {
+				...doc,
+				nodes: doc.nodes.map((node) => {
+					if (!nodeIds.has(node.id)) return node;
+					const p = point(node.x, node.y);
+					const extents = halfExtents(node);
+					let width = (node.w ?? (extents.hw * 2) / GRID) * factor;
+					let height = (node.h ?? (extents.hh * 2) / GRID) * factor;
+					if (Math.abs(a.rotationDelta ?? 0) % 180 === 90) [width, height] = [height, width];
+					return {
+						...node,
+						x: p.x,
+						y: p.y,
+						w: width,
+						h: height,
+						labelRot: rotation(node.labelRot),
+					};
+				}),
+				edges: doc.edges.map((edge) => {
+					if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) return edge;
+					return {
+						...edge,
+						curve: edge.curve == null ? edge.curve : edge.curve * factor,
+						angle: edge.from === edge.to ? (edge.angle ?? -90) + (a.rotationDelta ?? 0) : edge.angle,
+						labelRot: rotation(edge.labelRot),
+					};
+				}),
+				lines: doc.lines.map((line) => {
+					if (!lineIds.has(line.id)) return line;
+					const p1 = point(line.x1, line.y1);
+					const p2 = point(line.x2, line.y2);
+					return { ...line, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, labelRot: rotation(line.labelRot) };
+				}),
+				texts: doc.texts.map((text) => {
+					if (!textIds.has(text.id)) return text;
+					const p = point(text.x, text.y);
+					return {
+						...text,
+						x: p.x,
+						y: p.y,
+						size: Math.max(0.25, (text.size ?? 1) * factor),
+						labelRot: rotation(text.labelRot),
+					};
+				}),
+				tables: doc.tables.map((table) => {
+					if (!tableIds.has(table.id)) return table;
+					const center = point(table.x + (table.cols * table.cw) / 2, table.y + table.rows / 2);
+					return {
+						...table,
+						x: center.x - (table.cols * table.cw) / 2,
+						y: center.y - table.rows / 2,
+						rotation: rotation(table.rotation),
+						scale: Math.max(0.25, Math.min(4, (table.scale ?? 1) * factor)),
+					};
+				}),
+				images: doc.images.map((image) => {
+					if (!imageIds.has(image.id)) return image;
+					const center = point(image.x + image.w / 2, image.y + image.h / 2);
+					return {
+						...image,
+						x: center.x - image.w / 2,
+						y: center.y - image.h / 2,
+						rotation: rotation(image.rotation),
+						scale: Math.max(0.25, Math.min(4, (image.scale ?? 1) * factor)),
+					};
+				}),
+				derivations: doc.derivations.map((deriv) => {
+					if (!derivIds.has(deriv.id)) return deriv;
+					const center = point(deriv.x + (deriv.exprW + 7) / 2, deriv.y + deriv.steps.length / 2);
+					return {
+						...deriv,
+						x: center.x - (deriv.exprW + 7) / 2,
+						y: center.y - deriv.steps.length / 2,
+						rotation: rotation(deriv.rotation),
+						scale: Math.max(0.25, Math.min(4, (deriv.scale ?? 1) * factor)),
+					};
+				}),
 			};
 		}
 		case "DELETE_DERIV":

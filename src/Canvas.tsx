@@ -434,7 +434,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 
 	function imagePoint(e: React.MouseEvent<SVGImageElement>, px: number, py: number, pw: number, ph: number) {
 		const svg = e.currentTarget.ownerSVGElement;
-		const ctm = svg?.getScreenCTM();
+		const ctm = e.currentTarget.getScreenCTM();
 		if (!svg || !ctm) return null;
 		const point = svg.createSVGPoint();
 		point.x = e.clientX;
@@ -853,12 +853,15 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 							acc += w;
 						}
 						const totalW = acc;
+						const tableCx = px + totalW / 2;
+						const tableCy = py + (tb.rows * ch) / 2;
+						const tableTransform = `translate(${tableCx} ${tableCy}) rotate(${tb.rotation ?? 0}) scale(${tb.scale ?? 1}) translate(${-tableCx} ${-tableCy})`;
 						const struck = new Set(tb.struck ?? []);
 						const cellColors = tb.cellColors ?? {};
 						const colColors = tb.colColors ?? {};
 						const rowColors = tb.rowColors ?? {};
 						return (
-							<g key={tb.id}>
+							<g key={tb.id} transform={tableTransform}>
 								{tableSel && (
 									<rect
 										className="ui-only ring ring-sel"
@@ -1126,8 +1129,11 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 							acc += lineCount(st.expr);
 						}
 						const totalRows = acc;
+						const derivCx = (d.x + (1 + d.exprW + 6) / 2) * GRID;
+						const derivCy = (d.y + totalRows / 2) * GRID;
+						const derivTransform = `translate(${derivCx} ${derivCy}) rotate(${d.rotation ?? 0}) scale(${d.scale ?? 1}) translate(${-derivCx} ${-derivCy})`;
 						return (
-							<g key={d.id}>
+							<g key={d.id} transform={derivTransform}>
 								{dsel && (
 									<rect
 										className="ui-only ring ring-sel"
@@ -1304,6 +1310,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 								y={py}
 								onClick={() => onTextClick(t.id)}
 								className={`free-text${selected ? " selected" : ""}${t.text ? "" : " placeholder"}`}
+								style={{ fontSize: `calc(${16 * (t.size ?? 1)}px * var(--label-scale, 1))` }}
 								transform={rotTransform(t.labelRot, px, py)}
 							>
 								{t.text ? renderLines(t.text, px) : "Text…"}
@@ -1314,13 +1321,16 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 
 				{/* Images */}
 				{doc.images.map((img) => {
-					const selected = selection?.kind === "image" && selection.id === img.id;
+					const selected = (selection?.kind === "image" && selection.id === img.id) || multi.has("image:" + img.id);
 					const px = img.x * GRID;
 					const py = img.y * GRID;
 					const pw = img.w * GRID;
 					const ph = img.h * GRID;
+					const imageCx = px + pw / 2;
+					const imageCy = py + ph / 2;
+					const imageTransform = `translate(${imageCx} ${imageCy}) rotate(${img.rotation ?? 0}) scale(${img.scale ?? 1}) translate(${-imageCx} ${-imageCy})`;
 					return (
-						<g key={img.id}>
+						<g key={img.id} transform={imageTransform}>
 							<image
 								href={img.dataUrl}
 								x={px}

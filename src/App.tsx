@@ -1268,6 +1268,8 @@ export default function App() {
 		for (const t of doc.texts) if (inside(t.x, t.y)) found.push({ kind: "text", id: t.id });
 		for (const tb of doc.tables)
 			if (inside(tb.x + (tb.cols * tb.cw) / 2, tb.y + tb.rows / 2)) found.push({ kind: "table", id: tb.id });
+		for (const image of doc.images)
+			if (inside(image.x + image.w / 2, image.y + image.h / 2)) found.push({ kind: "image", id: image.id });
 		for (const d of doc.derivations) if (inside(d.x, d.y)) found.push({ kind: "deriv", id: d.id });
 		setMulti((prev) => {
 			const have = new Set(prev.map((r) => `${r.kind}:${r.id}`));
@@ -1301,6 +1303,11 @@ export default function App() {
 				if (!tb) continue;
 				minX = Math.min(minX, tb.x);
 				minY = Math.min(minY, tb.y);
+			} else if (ref.kind === "image") {
+				const image = doc.images.find((x) => x.id === ref.id);
+				if (!image) continue;
+				minX = Math.min(minX, image.x);
+				minY = Math.min(minY, image.y);
 			} else if (ref.kind === "deriv") {
 				const d = doc.derivations.find((x) => x.id === ref.id);
 				if (!d) continue;
@@ -1315,6 +1322,50 @@ export default function App() {
 	function moveMulti(dx: number, dy: number) {
 		if (multi.length === 0) return;
 		dispatch({ type: "MOVE_MANY", refs: multi, dx, dy });
+	}
+
+	function multiCenter(): { x: number; y: number } | null {
+		if (multi.length === 0) return null;
+		let minX = Infinity;
+		let minY = Infinity;
+		let maxX = -Infinity;
+		let maxY = -Infinity;
+		const include = (x1: number, y1: number, x2 = x1, y2 = y1) => {
+			minX = Math.min(minX, x1, x2);
+			minY = Math.min(minY, y1, y2);
+			maxX = Math.max(maxX, x1, x2);
+			maxY = Math.max(maxY, y1, y2);
+		};
+		for (const ref of multi) {
+			if (ref.kind === "node") {
+				const node = doc.nodes.find((item) => item.id === ref.id);
+				if (!node) continue;
+				const { hw, hh } = halfExtents(node);
+				include(node.x - hw / GRID, node.y - hh / GRID, node.x + hw / GRID, node.y + hh / GRID);
+			} else if (ref.kind === "line") {
+				const line = doc.lines.find((item) => item.id === ref.id);
+				if (line) include(line.x1, line.y1, line.x2, line.y2);
+			} else if (ref.kind === "text") {
+				const text = doc.texts.find((item) => item.id === ref.id);
+				if (text) include(text.x, text.y);
+			} else if (ref.kind === "table") {
+				const table = doc.tables.find((item) => item.id === ref.id);
+				if (table) include(table.x, table.y, table.x + table.cols * table.cw, table.y + table.rows);
+			} else if (ref.kind === "image") {
+				const image = doc.images.find((item) => item.id === ref.id);
+				if (image) include(image.x, image.y, image.x + image.w, image.y + image.h);
+			} else if (ref.kind === "deriv") {
+				const deriv = doc.derivations.find((item) => item.id === ref.id);
+				if (deriv) include(deriv.x, deriv.y, deriv.x + deriv.exprW + 7, deriv.y + deriv.steps.length);
+			}
+		}
+		return Number.isFinite(minX) ? { x: (minX + maxX) / 2, y: (minY + maxY) / 2 } : null;
+	}
+
+	function transformMulti(rotationDelta?: number, scaleFactor?: number) {
+		const center = multiCenter();
+		if (!center) return;
+		dispatch({ type: "TRANSFORM_MANY", refs: multi, cx: center.x, cy: center.y, rotationDelta, scaleFactor });
 	}
 
 	function startMultiSelect() {
@@ -2638,6 +2689,21 @@ export default function App() {
 				{selectedImage && (
 					<>
 						<span className="group-title">Image</span>
+						<span className="group-title">Fit to page</span>
+						<div className="btn-grid">
+							<button onClick={() => dispatch({ type: "TRANSFORM_IMAGE", id: selectedImage.id, rotationDelta: -90 })}>
+								↺ 90°
+							</button>
+							<button onClick={() => dispatch({ type: "TRANSFORM_IMAGE", id: selectedImage.id, rotationDelta: 90 })}>
+								↻ 90°
+							</button>
+							<button onClick={() => dispatch({ type: "TRANSFORM_IMAGE", id: selectedImage.id, scaleFactor: 0.8 })}>
+								Smaller
+							</button>
+							<button onClick={() => dispatch({ type: "TRANSFORM_IMAGE", id: selectedImage.id, scaleFactor: 1.25 })}>
+								Larger
+							</button>
+						</div>
 						<span className="group-title">Annotations</span>
 						<div className="btn-grid">
 							<button
@@ -2844,6 +2910,21 @@ export default function App() {
 				)}
 				{selectedTable && (
 					<>
+						<span className="group-title">Fit to page</span>
+						<div className="btn-grid">
+							<button onClick={() => dispatch({ type: "TRANSFORM_TABLE", id: selectedTable.id, rotationDelta: -90 })}>
+								↺ 90°
+							</button>
+							<button onClick={() => dispatch({ type: "TRANSFORM_TABLE", id: selectedTable.id, rotationDelta: 90 })}>
+								↻ 90°
+							</button>
+							<button onClick={() => dispatch({ type: "TRANSFORM_TABLE", id: selectedTable.id, scaleFactor: 0.8 })}>
+								Smaller
+							</button>
+							<button onClick={() => dispatch({ type: "TRANSFORM_TABLE", id: selectedTable.id, scaleFactor: 1.25 })}>
+								Larger
+							</button>
+						</div>
 						{cellSel && cellSel.id === selectedTable.id && (
 							<label>
 								Cell (r{cellSel.row + 1}, c{cellSel.col + 1})
@@ -3519,7 +3600,7 @@ export default function App() {
 				)}
 				{!selection && multiMode && (
 					<>
-						<span className="group-title">Group move ({multi.length})</span>
+						<span className="group-title">Group transform ({multi.length})</span>
 						{multi.length > 0 ? (
 							<>
 								<span className="group-title">Move (1 cell)</span>
@@ -3533,6 +3614,13 @@ export default function App() {
 									<span />
 									<button onClick={() => moveMulti(0, 1)}>↓</button>
 									<span />
+								</div>
+								<span className="group-title">Fit to page</span>
+								<div className="btn-grid">
+									<button onClick={() => transformMulti(-90)}>↺ 90°</button>
+									<button onClick={() => transformMulti(90)}>↻ 90°</button>
+									<button onClick={() => transformMulti(undefined, 0.8)}>Smaller</button>
+									<button onClick={() => transformMulti(undefined, 1.25)}>Larger</button>
 								</div>
 								<button onClick={() => setMulti([])}>Clear selection</button>
 							</>
@@ -3548,7 +3636,7 @@ export default function App() {
 				{!selection && !multiMode && (
 					<>
 						<p className="muted">Select something (Select mode) to edit its label and properties.</p>
-						<button onClick={startMultiSelect}>Select multiple to move</button>
+						<button onClick={startMultiSelect}>Select multiple</button>
 					</>
 				)}
 			</aside>

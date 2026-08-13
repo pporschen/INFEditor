@@ -112,6 +112,8 @@ export interface DiagTable {
 	cellColors?: Record<string, string>; // per-cell fill color, key = "row:col"
 	colColors?: Record<string, string>; // per-column fill color, key = column index
 	rowColors?: Record<string, string>; // per-row fill color, key = row index
+	rotation?: LabelRotation; // whole-table rotation in 90-degree steps
+	scale?: number; // whole-table proportional scale
 	form?: "dnf" | "knf"; // KV map normal form (header labels + cell polarity)
 	kvVars?: string[]; // KV map variable names for x_1..x_n labels
 }
@@ -138,6 +140,8 @@ export interface DiagImage {
 	h: number; // height in grid cells
 	dataUrl: string; // base64 PNG data URL
 	annotations?: ImageAnnotation[];
+	rotation?: LabelRotation;
+	scale?: number;
 }
 
 // A multi-line derivation → exports to a LaTeX align* block. Formatting only.
@@ -147,6 +151,8 @@ export interface DiagDerivation {
 	y: number;
 	exprW: number; // width of the expression column, in grid cells
 	steps: DerivStep[];
+	rotation?: LabelRotation;
+	scale?: number;
 }
 
 export interface Doc {
