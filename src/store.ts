@@ -104,6 +104,7 @@ export type Action =
 	| { type: "DELETE_DERIV"; id: string }
 	| { type: "SET_PAGES"; count: number }
 	| { type: "SET_DOC_NAME"; name: string }
+	| { type: "SET_DOC_NOTES"; notes: string }
 	| { type: "SET_NODE_LABEL"; id: string; label: string }
 	| { type: "SET_NODE_LABEL_ROT"; id: string; rot: 0 | 90 | 180 | 270 }
 	| { type: "SET_EDGE_LABEL"; id: string; label: string }
@@ -1168,6 +1169,8 @@ function docReducer(doc: Doc, a: Action): Doc {
 			return { ...doc, pages: Math.max(1, a.count) };
 		case "SET_DOC_NAME":
 			return { ...doc, name: a.name };
+		case "SET_DOC_NOTES":
+			return a.notes === (doc.notes ?? "") ? doc : { ...doc, notes: a.notes };
 		case "CLEAR":
 			return {
 				...doc,

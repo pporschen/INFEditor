@@ -165,6 +165,7 @@ export interface Doc {
 	derivations: DiagDerivation[];
 	pages: number; // number of stacked A4 pages
 	name?: string; // optional user-given diagram name, used as the default save filename
+	notes?: string; // private document notes; not rendered or exported
 }
 
 export type DerivField = "rel" | "expr" | "reason";

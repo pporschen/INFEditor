@@ -99,6 +99,7 @@ function normalizeDoc(d: unknown): Doc {
 		derivations: o.derivations ?? [],
 		pages: o.pages ?? 1,
 		name: typeof o.name === "string" ? o.name : undefined,
+		notes: typeof o.notes === "string" ? o.notes : undefined,
 	};
 }
 
@@ -335,6 +336,7 @@ export default function App() {
 		value: string;
 		multiline: boolean;
 	} | null>(null);
+	const [notesDraft, setNotesDraft] = useState<string | null>(null);
 	const attachLabel = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
 		labelInputRef.current = el;
 	};
@@ -383,6 +385,12 @@ export default function App() {
 		expandedApplyRef.current(value);
 	}
 
+	function saveNotes() {
+		if (notesDraft == null) return;
+		dispatch({ type: "SET_DOC_NOTES", notes: notesDraft });
+		setNotesDraft(null);
+	}
+
 	function tabLabel(tab: DocTab, index: number): string {
 		return tab.doc.name?.trim() || `Doc ${index + 1}`;
 	}
@@ -406,6 +414,7 @@ export default function App() {
 		setLoopMode(false);
 		setLoopFirst(null);
 		setExpandedEditor(null);
+		setNotesDraft(null);
 		endMultiSelect();
 		resetView();
 	}
@@ -2017,6 +2026,9 @@ export default function App() {
 						/>
 					</label>
 					<div className="btn-grid">
+						<button onClick={() => setNotesDraft(doc.notes ?? "")} title="Open notes for this document">
+							Notes
+						</button>
 						<button onClick={saveFile} title="Save the editable diagram to a .json file">
 							Save
 						</button>
@@ -2202,6 +2214,29 @@ export default function App() {
 							)}
 							<div className="editor-modal-actions">
 								<button onClick={() => setExpandedEditor(null)}>Done</button>
+							</div>
+						</div>
+					</div>
+				)}
+				{notesDraft != null && (
+					<div className="editor-modal-backdrop" onClick={saveNotes}>
+						<div className="editor-modal" onClick={(event) => event.stopPropagation()}>
+							<div className="editor-modal-title">Notes</div>
+							<textarea
+								autoFocus
+								className="editor-modal-input"
+								rows={14}
+								value={notesDraft}
+								onChange={(event) => setNotesDraft(event.target.value)}
+								onKeyDown={(event) => {
+									if (event.key === "Escape") setNotesDraft(null);
+								}}
+							/>
+							<div className="editor-modal-actions">
+								<button className="danger" onClick={() => setNotesDraft(null)}>
+									Cancel
+								</button>
+								<button onClick={saveNotes}>Save</button>
 							</div>
 						</div>
 					</div>

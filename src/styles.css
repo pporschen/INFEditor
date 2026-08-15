@@ -232,12 +232,12 @@ button.active kbd {
   stroke-width: 1;
 }
 
-/* A4 page frame + printable-margin guide */
+/* Solid physical A4 edge plus the optional 20 mm printable-margin guide. */
 .page-frame {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--ink);
   stroke-width: 2;
-  opacity: 0.7;
+  opacity: 0.65;
 }
 .page-margin {
   fill: none;
