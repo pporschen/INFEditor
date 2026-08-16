@@ -1721,6 +1721,20 @@ export default function App() {
 				return;
 			}
 			switch (e.key) {
+				case "ArrowUp":
+				case "ArrowDown":
+				case "ArrowLeft":
+				case "ArrowRight":
+					if (selectedTable) {
+						e.preventDefault();
+						dispatch({
+							type: "MOVE_TABLE",
+							id: selectedTable.id,
+							x: selectedTable.x + (e.key === "ArrowLeft" ? -LINE_STEP : e.key === "ArrowRight" ? LINE_STEP : 0),
+							y: selectedTable.y + (e.key === "ArrowUp" ? -LINE_STEP : e.key === "ArrowDown" ? LINE_STEP : 0),
+						});
+					}
+					break;
 				case "s":
 					changeMode("select");
 					break;
@@ -1777,7 +1791,7 @@ export default function App() {
 		}
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [changeMode, dispatch, selection, selectedImageAnnotationId]);
+	}, [changeMode, dispatch, selection, selectedImageAnnotationId, selectedTable]);
 
 	return (
 		<div className="app">
@@ -2945,6 +2959,62 @@ export default function App() {
 				)}
 				{selectedTable && (
 					<>
+						<span className="group-title">Move (1/4 cell)</span>
+						<div className="dpad">
+							<span />
+							<button
+								onClick={() =>
+									dispatch({
+										type: "MOVE_TABLE",
+										id: selectedTable.id,
+										x: selectedTable.x,
+										y: selectedTable.y - LINE_STEP,
+									})
+								}
+							>
+								↑
+							</button>
+							<span />
+							<button
+								onClick={() =>
+									dispatch({
+										type: "MOVE_TABLE",
+										id: selectedTable.id,
+										x: selectedTable.x - LINE_STEP,
+										y: selectedTable.y,
+									})
+								}
+							>
+								←
+							</button>
+							<span />
+							<button
+								onClick={() =>
+									dispatch({
+										type: "MOVE_TABLE",
+										id: selectedTable.id,
+										x: selectedTable.x + LINE_STEP,
+										y: selectedTable.y,
+									})
+								}
+							>
+								→
+							</button>
+							<span />
+							<button
+								onClick={() =>
+									dispatch({
+										type: "MOVE_TABLE",
+										id: selectedTable.id,
+										x: selectedTable.x,
+										y: selectedTable.y + LINE_STEP,
+									})
+								}
+							>
+								↓
+							</button>
+							<span />
+						</div>
 						<span className="group-title">Fit to page</span>
 						<div className="btn-grid">
 							<button onClick={() => dispatch({ type: "TRANSFORM_TABLE", id: selectedTable.id, rotationDelta: -90 })}>

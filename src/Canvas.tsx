@@ -853,9 +853,10 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 							acc += w;
 						}
 						const totalW = acc;
-						const tableCx = px + totalW / 2;
-						const tableCy = py + (tb.rows * ch) / 2;
-						const tableTransform = `translate(${tableCx} ${tableCy}) rotate(${tb.rotation ?? 0}) scale(${tb.scale ?? 1}) translate(${-tableCx} ${-tableCy})`;
+						const tableScale = tb.scale ?? 1;
+						const tableCx = px + (totalW * tableScale) / 2;
+						const tableCy = py + (tb.rows * ch * tableScale) / 2;
+						const tableTransform = `translate(${tableCx} ${tableCy}) rotate(${tb.rotation ?? 0}) translate(${-tableCx} ${-tableCy}) translate(${px} ${py}) scale(${tableScale}) translate(${-px} ${-py})`;
 						const struck = new Set(tb.struck ?? []);
 						const cellColors = tb.cellColors ?? {};
 						const colColors = tb.colColors ?? {};
