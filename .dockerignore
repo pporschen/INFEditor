@@ -1,0 +1,7 @@
+# npm ci and npm run build recreate both inside the builder stage.
+node_modules
+dist
+
+.git
+.devcontainer
+*.tsbuildinfo

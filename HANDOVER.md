@@ -44,6 +44,18 @@ Live: **https://pporschen.github.io/INFEditor/**
   builds and publishes `dist/` to GitHub Pages. Pages **Source must be
   "GitHub Actions"** in repo Settings (already set). `dist/` and `node_modules/`
   are gitignored.
+- **Homelab** (`192.168.178.51`, same pattern as pflegetool): `Dockerfile` builds
+  the app and serves it from nginx with self-signed TLS at
+  **`https://192.168.178.51:8083`** (plain HTTP redirects). The cert is mounted
+  from `CERT_PATH` (default `/opt/nyxcare/certs`, the pair pflegetool already
+  uses — same IP SAN, so devices already trust it). First time on the server:
+  `git clone https://github.com/pporschen/INFEditor.git && cd INFEditor &&
+  docker compose up -d --build`. Update: `git pull && docker compose up -d
+  --build`. If the shared cert is renewed, also run `docker compose up -d
+  --force-recreate`.
+- **Dev container**: `.devcontainer/` (Node 20). Pushing from it needs the
+  deploy key at `~/.ssh/infeditor_deploy` on the WSL host (mounted in; the
+  remote uses the `github-infeditor` SSH host alias).
 
 ## Architecture (`src/`)
 
