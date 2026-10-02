@@ -18,6 +18,4 @@ FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# TLS terminates here (self-signed cert mounted by docker-compose.yml);
-# docker-compose publishes 443 as host port 8083.
-EXPOSE 443
+EXPOSE 80

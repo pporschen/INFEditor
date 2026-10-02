@@ -1,12 +1,6 @@
 services:
   infeditor:
     build: .
-    volumes:
-      # Self-signed TLS cert + key from the host, never from the image or the
-      # repo. Defaults to the homelab's existing pair (shared with pflegetool,
-      # same IP SAN); for local testing point CERT_PATH at another dir with
-      # nyxcare.crt / nyxcare.key.
-      - ${CERT_PATH:-/opt/nyxcare/certs}:/etc/nginx/certs:ro
     ports:
-      - "8083:443"
+      - "80:80"
     restart: unless-stopped
