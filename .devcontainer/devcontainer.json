@@ -1,0 +1,25 @@
+{
+  "name": "INFEditor",
+  // Node 20 matches the GitHub Pages deploy workflow.
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm",
+
+  // The deploy key is mounted to a separate dir (not straight into ~/.ssh) so
+  // postCreateCommand can copy it with the 600 permissions ssh requires — a
+  // readonly bind mount can't be chmod'ed. The remote uses the
+  // `github-infeditor` host alias, defined here to pick that key.
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh/infeditor_deploy,target=/home/node/.ssh-src/infeditor_deploy,type=bind,readonly",
+    "source=${localEnv:HOME}/.ssh/infeditor_deploy.pub,target=/home/node/.ssh-src/infeditor_deploy.pub,type=bind,readonly"
+  ],
+
+  "postCreateCommand": "mkdir -p ~/.ssh && cp ~/.ssh-src/infeditor_deploy ~/.ssh-src/infeditor_deploy.pub ~/.ssh/ && chmod 700 ~/.ssh && chmod 600 ~/.ssh/infeditor_deploy && chmod 644 ~/.ssh/infeditor_deploy.pub && printf 'Host github-infeditor\\n  HostName github.com\\n  User git\\n  IdentityFile ~/.ssh/infeditor_deploy\\n  IdentitiesOnly yes\\n' >> ~/.ssh/config && chmod 600 ~/.ssh/config && npm ci",
+
+  // 5173 = `npm run dev`, 4173 = `npm run preview`.
+  "forwardPorts": [5173, 4173],
+  "portsAttributes": {
+    "5173": { "label": "Vite dev", "onAutoForward": "openBrowser" },
+    "4173": { "label": "Vite preview", "onAutoForward": "notify" }
+  },
+
+  "remoteUser": "node"
+}
