@@ -9,6 +9,7 @@ import { GRID, W, H, PAGE_W, PAGE_H, PAGE_MARGIN, pageTop, halfExtents } from ".
 import { tableToLatex, derivToLatex } from "./latex";
 import { kvHeaderRow, kvHeaderCol } from "./kv";
 import { newId } from "./id";
+import { serverExportsAvailable, storeOnServer, EXPORTS_LISTING_URL } from "./serverExports";
 import type {
 	Doc,
 	DiagTable,
@@ -305,6 +306,10 @@ export default function App() {
 		col: number;
 	} | null>(null);
 	const [tableColor, setTableColor] = useState("#f59e0b");
+	const [hasServerExports, setHasServerExports] = useState(false);
+	useEffect(() => {
+		void serverExportsAvailable().then(setHasServerExports);
+	}, []);
 	const [printIdentity, setPrintIdentity] = useState(() => {
 		try {
 			const saved = JSON.parse(localStorage.getItem(PRINT_IDENTITY_KEY) ?? "{}") as {
@@ -694,6 +699,7 @@ export default function App() {
 		a.download = filename;
 		a.click();
 		URL.revokeObjectURL(url);
+		void storeOnServer(filename, blob);
 	}
 
 	// Open a previously saved .json file and replace the document with it.
@@ -2058,7 +2064,11 @@ export default function App() {
 							Print PDF
 						</button>
 						<button
-							onClick={() => svgRef.current && exportPng(svgRef.current)}
+							onClick={() => {
+								if (!svgRef.current) return;
+								const filename = `${doc.name || activeTabLabel()}.png`;
+								exportPng(svgRef.current, filename, (blob) => void storeOnServer(filename, blob));
+							}}
 							title="Export all content as a PNG image"
 						>
 							PNG
@@ -2071,6 +2081,14 @@ export default function App() {
 						onChange={handleLoadFile}
 						style={{ display: "none" }}
 					/>
+					{hasServerExports && (
+						<p className="muted">
+							Save and PNG also store a copy on the server —{" "}
+							<a href={EXPORTS_LISTING_URL} target="_blank" rel="noreferrer">
+								view exports
+							</a>
+						</p>
+					)}
 				</div>
 
 				<div className="hint">

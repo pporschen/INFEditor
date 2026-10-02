@@ -3,4 +3,8 @@ services:
     build: .
     ports:
       - "80:80"
+    volumes:
+      # Server copies of Save/PNG exports (nginx.conf /exports/). A host
+      # folder, so the files are easy to reach and survive rebuilds.
+      - ${EXPORTS_PATH:-/opt/infeditor-exports}:/srv/exports
     restart: unless-stopped

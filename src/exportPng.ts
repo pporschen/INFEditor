@@ -143,7 +143,7 @@ export function applyLightStyles(root: Element, ls: number) {
 	});
 }
 
-export function exportPng(svg: SVGSVGElement, filename = "diagram.png") {
+export function exportPng(svg: SVGSVGElement, filename = "diagram.png", onBlob?: (blob: Blob) => void) {
 	// measure the actual content (independent of the current pan/zoom) so the
 	// export captures everything, not just what's on screen.
 	const P = 24; // padding around the content
@@ -203,6 +203,7 @@ export function exportPng(svg: SVGSVGElement, filename = "diagram.png") {
 		URL.revokeObjectURL(url);
 		canvas.toBlob((blob) => {
 			if (!blob) return;
+			onBlob?.(blob);
 			const a = document.createElement("a");
 			a.href = URL.createObjectURL(blob);
 			a.download = filename;
