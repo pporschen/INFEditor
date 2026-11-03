@@ -115,7 +115,7 @@ nicely **and** exports verbatim-correct:
 - `\overline{}` / `\bar{}` negation — rendered with **combining overline U+0305**
   (reliable everywhere incl. export; `text-decoration` on `<tspan>` was flaky).
   Braces are **invisible grouping** (like LaTeX). Nesting supported.
-- operators: `\cdot`·  `\oplus`⊕  `\lnot`/`\neg`¬  `\lor`/`\vee`∨  `\land`/`\wedge`∧.
+- operators: `\cdot`·  `\oplus`⊕  `\lnot`/`\neg`¬  `\lor`/`\vee`∨  `\land`/`\wedge`∧  `\sum`Σ (with inline limits: `\sum_{i=0}^{n}` renders Σ with `i=0` subscript and `n` superscript).
 - `\left` / `\right` are stripped (keep the bracket; drop the invisible `\left.`/`\right.` dot).
 
 Boolean **word auto-convert** (`boolConvert`): `and→\land`, `or→\lor`,

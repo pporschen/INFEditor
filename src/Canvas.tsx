@@ -1,4 +1,4 @@
-import { forwardRef, useMemo, Fragment, type CSSProperties, type ReactNode } from "react";
+import { forwardRef, useLayoutEffect, useMemo, useRef, Fragment, type CSSProperties, type ReactNode } from "react";
 import type { Doc, DiagEdge, TableLoop, Mode, Selection, Shape } from "./types";
 import { GRID, center, anchor, halfExtents, PAGE_W, PAGE_H, PAGE_MARGIN, pageTop } from "./geometry";
 import { GATES } from "./gates";
@@ -16,6 +16,8 @@ function rotTransform(rot: 0 | 90 | 180 | 270 | undefined, cx: number, cy: numbe
 //   sub/superscript  q_0  x^2  a_{10}
 //   negation bar     \overline{A+B}  (\bar works too, nesting supported)
 //   operators        \cdot · \oplus ⊕ \lnot/\neg ¬ \lor/\vee ∨ \land/\wedge ∧
+//                    \sum Σ  \int ∫  \sqrt{x}  \leq ≤  \geq ≥  \times ×  \div ÷
+//                    \in ∈  \infty ∞  \rightarrow →  \alpha α  \beta β  \pi π
 // Anything else passes through unchanged.
 const OP: Record<string, string> = {
 	cdot: "·",
@@ -30,11 +32,23 @@ const OP: Record<string, string> = {
 	Leftarrow: "⇐",
 	Rightarrow: "⇒",
 	implies: "⇒",
+	rightarrow: "→",
 	Leftrightarrow: "⇔",
 	iff: "⇔",
 	neq: "≠",
 	equiv: "≡",
+	leq: "≤",
+	geq: "≥",
+	times: "×",
+	div: "÷",
+	in: "∈",
+	infty: "∞",
+	int: "∫",
+	alpha: "α",
+	beta: "β",
+	pi: "π",
 	ss: "ß",
+	sum: "Σ",
 };
 
 const BINARY_OPS = new Set([
@@ -47,13 +61,21 @@ const BINARY_OPS = new Set([
 	"leftarrow",
 	"Leftarrow",
 	"Rightarrow",
+	"rightarrow",
 	"implies",
 	"Leftrightarrow",
 	"iff",
 	"neq",
 	"equiv",
+	"leq",
+	"geq",
+	"times",
+	"div",
+	"in",
 ]);
 const MATH_SPACE = "\u2002";
+// sub/superscripts use a thin space instead, and never two in a row
+const COMPACT_SPACE = "\u2009";
 
 // LaTeX diaeresis accent (\"a, \"{o}, …) → the precomposed umlaut for display,
 // while the source stays pure LaTeX for export. Falls back to a combining mark.
@@ -85,7 +107,7 @@ function overlineString(inner: string): string {
 // Render a small LaTeX subset: sub/superscript, \overline / \bar negation
 // bars, basic text formatting commands, and boolean operators. Braces group
 // (and are invisible).
-export function renderRich(s: string): ReactNode {
+export function renderRich(s: string, compact = false): ReactNode {
 	const out: ReactNode[] = [];
 	let buf = "";
 	let key = 0;
@@ -120,10 +142,17 @@ export function renderRich(s: string): ReactNode {
 		const ch = s[i];
 		if (usesMathMarkup && (ch === " " || ch === "\t")) {
 			while (s[i] === " " || s[i] === "\t") i++;
-			buf += MATH_SPACE;
+			if (!compact) buf += MATH_SPACE;
+			else if (!buf.endsWith(COMPACT_SPACE)) buf += COMPACT_SPACE;
 			continue;
 		}
 		if (ch === "\\") {
+			// Escaped literal markup characters
+			if (s[i + 1] === "_" || s[i + 1] === "^") {
+				buf += s[i + 1];
+				i += 2;
+				continue;
+			}
 			// LaTeX diaeresis accent: \"a or \"{a} → umlaut glyph for display
 			if (s[i + 1] === '"') {
 				i += 2;
@@ -132,7 +161,7 @@ export function renderRich(s: string): ReactNode {
 				continue;
 			}
 			const m =
-				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|Leftrightarrow|implies|iff|left|right|neq|equiv|ss)/.exec(
+				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|rightarrow|Leftrightarrow|implies|iff|left|right|neq|equiv|leq|geq|times|div|infty|int|in|alpha|beta|pi|ss|sum|sqrt)/.exec(
 					s.slice(i),
 				);
 			if (m) {
@@ -147,7 +176,7 @@ export function renderRich(s: string): ReactNode {
 						// Group overline so a whole term gets one continuous bar.
 						out.push(
 							<tspan key={key++} style={{ textDecorationLine: "overline", textDecorationSkipInk: "none" }}>
-								{renderRich(inner)}
+								{renderRich(inner, compact)}
 							</tspan>,
 						);
 					}
@@ -160,14 +189,74 @@ export function renderRich(s: string): ReactNode {
 					if (cmd === "underline") style.textDecorationLine = "underline";
 					out.push(
 						<tspan key={key++} style={style}>
-							{renderRich(inner)}
+							{renderRich(inner, compact)}
 						</tspan>,
 					);
 				} else if (cmd === "left" || cmd === "right") {
 					// delimiter sizing hint — keep the bracket, drop an invisible '.'
 					if (s[i] === ".") i++;
+				} else if (cmd === "sum") {
+					// Summation operator with optional inline limits:
+					// \sum_{lower}^{upper} renders Σ with lower as subscript
+					// and upper as superscript, e.g. Σ^n_{i=0}. Both limits may
+					// contain `\\\\` or real newlines to stack multiple lines.
+					flush();
+					let lower = "";
+					let upper = "";
+					while (i < s.length && (s[i] === "_" || s[i] === "^")) {
+						const kind = s[i];
+						i++;
+						const arg = readArg();
+						if (kind === "_") lower = arg;
+						else upper = arg;
+					}
+					const sumKey = key++;
+					const limits: ReactNode[] = [];
+					if (upper) {
+						const upperKey = key++;
+						limits.push(
+							<tspan key={upperKey} baselineShift="super" fontSize="0.7em">
+								{renderArgLines(upper, upperKey, "super")}
+							</tspan>,
+						);
+					}
+					if (lower) {
+						const lowerKey = key++;
+						limits.push(
+							<tspan key={lowerKey} baselineShift="sub" fontSize="0.7em">
+								{renderArgLines(lower, lowerKey, "sub")}
+							</tspan>,
+						);
+					}
+					// with both limits, align them in one column (see layoutMathStacks)
+					out.push(
+						<tspan key={sumKey}>
+							{OP.sum}
+							{limits.length === 2 ? (
+								<tspan data-mstack="">
+									{limits}
+									<tspan>{"​"}</tspan>
+								</tspan>
+							) : (
+								limits
+							)}
+						</tspan>,
+					);
+				} else if (cmd === "sqrt") {
+					const inner = readArg();
+					flush();
+					out.push(
+						<tspan key={key++}>
+							{"√"}
+							<tspan style={{ textDecorationLine: "overline", textDecorationSkipInk: "none" }}>
+								{renderRich(inner, compact)}
+							</tspan>
+						</tspan>,
+					);
 				} else {
-					buf += BINARY_OPS.has(cmd) ? `${MATH_SPACE}${OP[cmd]}${MATH_SPACE}` : OP[cmd];
+					if (!BINARY_OPS.has(cmd)) buf += OP[cmd];
+					else if (!compact) buf += `${MATH_SPACE}${OP[cmd]}${MATH_SPACE}`;
+					else buf += `${buf.endsWith(COMPACT_SPACE) ? "" : COMPACT_SPACE}${OP[cmd]}${COMPACT_SPACE}`;
 				}
 				continue;
 			}
@@ -179,9 +268,11 @@ export function renderRich(s: string): ReactNode {
 			flush();
 			i++;
 			const inner = readArg();
+			const argKey = key++;
+			const dir = ch === "^" ? "super" : "sub";
 			out.push(
-				<tspan key={key++} baselineShift={ch === "^" ? "super" : "sub"} fontSize="0.7em">
-					{renderRich(inner)}
+				<tspan key={argKey} baselineShift={dir} fontSize="0.7em">
+					{renderArgLines(inner, argKey, dir)}
 				</tspan>,
 			);
 			continue;
@@ -189,7 +280,7 @@ export function renderRich(s: string): ReactNode {
 		if (ch === "{") {
 			// bare group — render its contents, braces are invisible
 			flush();
-			out.push(<Fragment key={key++}>{renderRich(readArg())}</Fragment>);
+			out.push(<Fragment key={key++}>{renderRich(readArg(), compact)}</Fragment>);
 			continue;
 		}
 		buf += ch;
@@ -197,6 +288,126 @@ export function renderRich(s: string): ReactNode {
 	}
 	flush();
 	return out;
+}
+
+// Split a string on `\\` or real newlines, but ignore separators that are
+// inside balanced `{...}` braces. This lets subscripts/superscripts and
+// \sum limits contain their own line breaks without breaking the surrounding
+// text. Returns the split lines and the source offset where each line begins.
+export function splitOnTopLevelBreaks(s: string): { lines: string[]; offsets: number[] } {
+	const lines: string[] = [];
+	const offsets: number[] = [];
+	let last = 0;
+	let i = 0;
+	let depth = 0;
+	while (i < s.length) {
+		const ch = s[i];
+		if (ch === "\\" && s[i + 1] === "\\") {
+			if (depth === 0) {
+				offsets.push(last);
+				lines.push(s.slice(last, i));
+				last = i + 2;
+			}
+			i += 2;
+			continue;
+		}
+		if (ch === "\r" || ch === "\n") {
+			if (depth === 0) {
+				offsets.push(last);
+				lines.push(s.slice(last, i));
+				last = i + 1;
+				if (ch === "\r" && s[i + 1] === "\n") {
+					last++;
+					i++;
+				}
+			}
+			i++;
+			continue;
+		}
+		if (ch === "{") depth++;
+		else if (ch === "}") depth--;
+		i++;
+	}
+	offsets.push(last);
+	lines.push(s.slice(last));
+	return { lines, offsets };
+}
+
+// Scale a length like "1.1em" or 30 by k, keeping its unit.
+function scaleLength(len: number | string, k: number): number | string {
+	if (typeof len === "number") return len * k;
+	const mm = /^(-?\d*\.?\d+)([a-z%]*)$/i.exec(len.trim());
+	if (!mm) return 0;
+	return `${Number(mm[1]) * k}${mm[2] || ""}`;
+}
+
+// Split a math argument (subscript/superscript/\\sum limit) on `\\` or real
+// newlines and render it as vertically stacked lines. Breaks inside balanced
+// braces stay inside the argument. Subscripts stack downward from the sub
+// position, superscripts upward so their last line sits at the super position.
+//
+// SVG cannot left-align tspans without knowing their x, so the stack is tagged
+// with `data-mstack`; layoutMathStacks() measures it after render and sets dx
+// so every line starts under the first and the text after the stack resumes
+// right of its widest line. The trailing zero-width tspan carries that resume
+// offset and returns the pen to the original baseline.
+function renderArgLines(
+	s: string,
+	baseKey: number,
+	dir: "sub" | "super",
+	lineHeight: number | string = "1.1em",
+): ReactNode {
+	const { lines } = splitOnTopLevelBreaks(s);
+	if (lines.length === 1) return renderRich(s, true);
+	const n = lines.length - 1;
+	const firstDy = dir === "super" ? scaleLength(lineHeight, -n) : 0;
+	const restoreDy = dir === "super" ? 0 : scaleLength(lineHeight, -n);
+	return (
+		<tspan data-mstack="">
+			{lines.map((ln, i) => (
+				<tspan key={`${baseKey}-${i}`} dy={i === 0 ? firstDy : lineHeight}>
+					{renderRich(ln.trim(), true)}
+				</tspan>
+			))}
+			<tspan key={`${baseKey}-restore`} dy={restoreDy}>
+				{"\u200B"}
+			</tspan>
+		</tspan>
+	);
+}
+
+// Horizontal layout for `data-mstack` groups (see renderArgLines): every child
+// but the last starts at the first child's left edge; the last (zero-width)
+// child moves the pen to the right edge of the widest one. Inner stacks are
+// laid out first so outer measurements include them. Must run after every
+// render that may change math text.
+export function layoutMathStacks(root: Element | null) {
+	if (!root) return;
+	const stacks = Array.from(root.querySelectorAll<SVGTSpanElement>("tspan[data-mstack]")).reverse();
+	for (const st of stacks) {
+		const parts = Array.from(st.children) as SVGTSpanElement[];
+		if (parts.length < 2) continue;
+		for (const p of parts) p.removeAttribute("dx");
+		const items = parts.slice(0, -1);
+		const restore = parts[parts.length - 1];
+		try {
+			const b0 = items[0].getBBox();
+			const left = b0.x;
+			let right = b0.x + b0.width;
+			let lastRight = right;
+			for (const it of items.slice(1)) {
+				const b = it.getBBox();
+				const dx = left - b.x;
+				if (Math.abs(dx) > 0.01) it.setAttribute("dx", String(dx));
+				lastRight = left + b.width;
+				right = Math.max(right, lastRight);
+			}
+			const dx = right - lastRight;
+			if (Math.abs(dx) > 0.01) restore.setAttribute("dx", String(dx));
+		} catch {
+			/* getBBox throws when the text is not rendered (e.g. display:none) */
+		}
+	}
 }
 
 // Render text that may contain `\\` (LaTeX-style) or real newlines as stacked
@@ -210,18 +421,7 @@ export function renderLines(
 	onLineClick?: LineClick,
 	centerBlock = false,
 ): ReactNode {
-	const sep = /(\\\\|\r?\n)/g;
-	const lines: string[] = [];
-	const offsets: number[] = [];
-	let last = 0;
-	let m: RegExpExecArray | null;
-	while ((m = sep.exec(s)) !== null) {
-		offsets.push(last);
-		lines.push(s.slice(last, m.index));
-		last = m.index + m[0].length;
-	}
-	offsets.push(last);
-	lines.push(s.slice(last));
+	const { lines, offsets } = splitOnTopLevelBreaks(s);
 	if (lines.length === 1 && !onLineClick) return renderRich(s);
 	let firstDy: number | string = 0;
 	if (centerBlock && lines.length > 1) {
@@ -446,6 +646,10 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 		};
 	}
 
+	// align multi-line sub/superscripts once the text is in the DOM
+	const contentRef = useRef<SVGGElement>(null);
+	useLayoutEffect(() => layoutMathStacks(contentRef.current));
+
 	return (
 		<svg
 			ref={ref}
@@ -573,7 +777,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 			</g>
 
 			{/* all diagram content (measured by exportPng via getBBox) */}
-			<g id="content">
+			<g id="content" ref={contentRef}>
 				{/* free wire lines (under nodes/edges) */}
 				<g {...hitProps}>
 					{doc.lines.map((l) => {
@@ -1122,7 +1326,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 						const exprX = (d.x + 1) * GRID;
 						const reasonX = (d.x + 1 + d.exprW) * GRID;
 						// each step is as tall as its expression's line count; steps stack
-						const lineCount = (s: string) => Math.max(1, s.split(/\\\\/).length);
+						const lineCount = (s: string) => splitOnTopLevelBreaks(s).lines.length;
 						const offsets: number[] = [];
 						let acc = 0;
 						for (const st of d.steps) {

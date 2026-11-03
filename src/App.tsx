@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, renderLines } from "./Canvas";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Canvas, layoutMathStacks, renderLines, splitOnTopLevelBreaks } from "./Canvas";
 import type { View } from "./Canvas";
 import { useEditor } from "./store";
 import { exportPng } from "./exportPng";
@@ -458,8 +458,10 @@ export default function App() {
 	}
 
 	const modalPreviewSource = expandedEditor ? expandedEditor.value.replace(/\n/g, "\\\\") : "";
-	const modalPreviewLines = Math.max(1, modalPreviewSource.split(/\\\\/).length);
+	const modalPreviewLines = splitOnTopLevelBreaks(modalPreviewSource).lines.length;
 	const modalPreviewHeight = Math.min(220, modalPreviewLines * 30 + 20);
+	const modalPreviewRef = useRef<SVGSVGElement>(null);
+	useLayoutEffect(() => layoutMathStacks(modalPreviewRef.current));
 
 	function createKvFromSetup() {
 		if (!kvSetup) return;
@@ -510,7 +512,7 @@ export default function App() {
 		const d = doc.derivations.find((x) => x.id === selection.id);
 		if (!d) return;
 		let off = 0;
-		for (let k = 0; k < derivStep; k++) off += Math.max(1, d.steps[k].expr.split(/\\\\/).length);
+		for (let k = 0; k < derivStep; k++) off += splitOnTopLevelBreaks(d.steps[k].expr).lines.length;
 		const lineY = (d.y + off + 0.5) * GRID;
 		setView((v) => {
 			const h = v.w * aspect;
@@ -2194,7 +2196,11 @@ export default function App() {
 								<div className="editor-modal-preview-title">Preview</div>
 								{expandedEditor.value.trim() ? (
 									<div className="editor-modal-preview">
-										<svg className="editor-modal-preview-svg" style={{ height: `${modalPreviewHeight}px` }}>
+										<svg
+											ref={modalPreviewRef}
+											className="editor-modal-preview-svg"
+											style={{ height: `${modalPreviewHeight}px` }}
+										>
 											<text x={12} y={24} className="editor-modal-preview-text">
 												{renderLines(modalPreviewSource, 12, 30)}
 											</text>
