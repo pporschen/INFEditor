@@ -392,12 +392,11 @@ export default function App() {
 	}, [mathPaletteOpen]);
 
 	// Keep the current mode/table preset valid when switching to the
-	// math-focused profile. Done on the switch only, so a pasted image can
-	// still enter image mode while the math profile is active.
+	// math-focused profile (its hidden CS tools can't stay active).
 	function switchProfile(next: Profile) {
 		setProfile(next);
 		if (next === "math") {
-			if (mode === "node" || mode === "edge" || mode === "line" || mode === "image") setMode("select");
+			if (mode === "node" || mode === "edge" || mode === "line") setMode("select");
 			setTablePreset("blank");
 		}
 	}
@@ -1811,7 +1810,7 @@ export default function App() {
 					changeMode("text");
 					break;
 				case "i":
-					if (profile === "cs" && pendingImage) changeMode("image");
+					if (pendingImage) changeMode("image");
 					break;
 				case "b":
 					changeMode("table");
@@ -1907,16 +1906,14 @@ export default function App() {
 						<button className={mode === "text" ? "active" : ""} onClick={() => changeMode("text")}>
 							Text <kbd>t</kbd>
 						</button>
-						{profile === "cs" && (
-							<button
-								className={mode === "image" ? "active" : ""}
-								onClick={() => changeMode("image")}
-								title={pendingImage ? "Click canvas to place image" : "Paste an image first (Ctrl+V)"}
-								disabled={!pendingImage}
-							>
-								Image <kbd>i</kbd>
-							</button>
-						)}
+						<button
+							className={mode === "image" ? "active" : ""}
+							onClick={() => changeMode("image")}
+							title={pendingImage ? "Click canvas to place image" : "Paste an image first (Ctrl+V)"}
+							disabled={!pendingImage}
+						>
+							Image <kbd>i</kbd>
+						</button>
 						<button className={mode === "table" ? "active" : ""} onClick={() => changeMode("table")}>
 							Table <kbd>b</kbd>
 						</button>

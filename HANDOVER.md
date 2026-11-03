@@ -155,8 +155,9 @@ Modes (keyboard): Select `s`, Node `p`, Connect `c`, Line `l`, Text `t`, Table
 - **Profile switcher** (top of the left toolbar): choose between the **CS** and
   **Math** toolbar layouts. The choice is persisted to `localStorage` and only
   affects toolbar visibility — documents, canvas, and exports stay unchanged.
-  CS shows Node/Connect/Line/Image modes, the shape picker, and all table presets;
+  CS shows Node/Connect/Line modes, the shape picker, and all table presets;
   Math hides those CS-specific tools and the right-toolbar symbol palettes.
+  Image placement is available in both profiles.
 - **Math symbols popup** (Math profile, `src/MathPalette.tsx`): floating palette
   toggled with the `Σ Symbols` button or `m`, dragged by its title bar. Open
   state and position persist in `localStorage`. Two sections: **Math** (Σ, Σ
