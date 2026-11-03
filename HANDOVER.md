@@ -125,8 +125,10 @@ Idempotent, whole-word only. Applied in the derivation *Expression* field and in
 **Math-mode table cells** (gated on the table's `math` toggle, so ordinary prose
 tables aren't mangled).
 
-An **Insert** palette (shown when a label field is focused) inserts these:
-`A̅ NOT`, `· AND`, `+ OR`, `⊕ XOR`, `( )`, `x²`, `x₂`. It targets whichever input
+A **Symbols** palette (shown when a label field is focused) inserts math glyphs
+(`Σ` via `\sum`; add `_{lower}^{upper}` manually for limits). A separate **Insert**
+palette inserts these:
+`A̅ NOT`, `· AND`, `+ OR`, `⊕ XOR`, `( )`, `x²`, `x₂`. Both target whichever input
 is focused via `document.activeElement` (`onMouseDown preventDefault` keeps focus).
 
 ## Modes & interaction
@@ -134,6 +136,12 @@ is focused via `document.activeElement` (`onMouseDown preventDefault` keeps focu
 Modes (keyboard): Select `s`, Node `p`, Connect `c`, Line `l`, Text `t`, Table
 `b`, Deriv `r`, Delete `d`.
 
+- **Profile switcher** (top of the left toolbar): choose between the **CS** and
+  **Math** toolbar layouts. The choice is persisted to `localStorage` and only
+  affects toolbar visibility — documents, canvas, and exports stay unchanged.
+  CS shows Node/Connect/Line/Image modes, the shape picker, and all table presets;
+  Math hides those CS-specific tools. In Math profile, a **Math snippets** palette
+  appears in the right toolbar whenever a text item or derivation step is selected.
 - **Node** shapes: State (2 corners → ellipse), Box (2 corners), Junction dot
   (single dwell). **Table**: Blank (2-corner draw) or Truth 2/3/4 (single dwell,
   fixed size). **Line/Text/Deriv**: place then edit.

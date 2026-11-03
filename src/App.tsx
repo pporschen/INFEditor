@@ -16,6 +16,7 @@ import type {
 	LabelRotation,
 	LineArrow,
 	Mode,
+	Profile,
 	RelType,
 	Selection,
 	Shape,
@@ -24,6 +25,7 @@ import type {
 const STORAGE_KEY = "infeditor.doc.v1";
 const WORKSPACE_KEY = "infeditor.workspace.v1";
 const PRINT_IDENTITY_KEY = "infeditor.printIdentity.v1";
+const PROFILE_KEY = "infeditor.profile.v1";
 const CURVE_STEP = 24; // pixels of bow added per button press
 const CURVE_MAX = 168; // clamp so arcs stay reasonable
 const LOOP_SIZE_MIN = -18; // clamp for self-loop extra size (keeps a visible loop)
@@ -83,6 +85,28 @@ const REL_TYPES: { rel: RelType; label: string }[] = [
 	{ rel: "realization", label: "▷  Realization (dashed)" },
 	{ rel: "aggregation", label: "◇  Aggregation (whole→part)" },
 	{ rel: "composition", label: "◆  Composition (whole→part)" },
+];
+
+const MATH_SYMBOLS = [
+	{ name: "sum", label: "Σ", latex: "\\sum ", title: "Summation \\sum" },
+] as const;
+
+// Quick math snippets shown in the math-focused toolbar profile.
+const MATH_SNIPPETS: { label: string; insert: string | [string, string]; title: string }[] = [
+	{ label: "Σ", insert: "\\sum ", title: "Summation \\sum" },
+	{ label: "∫", insert: "\\int ", title: "Integral \\int" },
+	{ label: "√", insert: ["\\sqrt{", "}"], title: "Square root \\sqrt{ }" },
+	{ label: "×", insert: "\\times ", title: "Times \\times" },
+	{ label: "÷", insert: "\\div ", title: "Divides \\div" },
+	{ label: "∞", insert: "\\infty ", title: "Infinity \\infty" },
+	{ label: "∈", insert: "\\in ", title: "Element \\in" },
+	{ label: "→", insert: "\\rightarrow ", title: "Right arrow \\rightarrow" },
+	{ label: "≠", insert: "\\neq ", title: "Not equal \\neq" },
+	{ label: "≤", insert: "\\leq ", title: "Less or equal \\leq" },
+	{ label: "≥", insert: "\\geq ", title: "Greater or equal \\geq" },
+	{ label: "α", insert: "\\alpha ", title: "Alpha \\alpha" },
+	{ label: "β", insert: "\\beta ", title: "Beta \\beta" },
+	{ label: "π", insert: "\\pi ", title: "Pi \\pi" },
 ];
 
 // Coerce parsed JSON into a valid Doc, tolerating saves from before a
@@ -271,9 +295,13 @@ export default function App() {
 	const { doc, canUndo, dispatch } = useEditor(() => initialWorkspace.activeDoc);
 	const [tabs, setTabs] = useState<DocTab[]>(() => initialWorkspace.tabs);
 	const [activeTabId, setActiveTabId] = useState(() => initialWorkspace.activeId);
-	const [mode, setMode] = useState<Mode>("node");
+	const [mode, setMode] = useState<Mode>("select");
 	const [shape, setShape] = useState<Shape>("circle");
 	const [textKind, setTextKind] = useState<"label" | "text">("text");
+	const [profile, setProfile] = useState<Profile>(() => {
+		const saved = localStorage.getItem(PROFILE_KEY);
+		return saved === "cs" || saved === "math" ? saved : "cs";
+	});
 	const [selection, setSelection] = useState<Selection>(null);
 	// group multi-select: while `multiMode` is on, each dwell toggles a part into
 	// `multi` (refs `{kind,id}`) so several items can be nudged together.
@@ -362,6 +390,21 @@ export default function App() {
 	useEffect(() => {
 		localStorage.setItem(PRINT_IDENTITY_KEY, JSON.stringify(printIdentity));
 	}, [printIdentity]);
+
+	useEffect(() => {
+		localStorage.setItem(PROFILE_KEY, profile);
+	}, [profile]);
+
+	// Keep the current mode/table preset valid when switching to the
+	// math-focused profile. Done on the switch only, so a pasted image can
+	// still enter image mode while the math profile is active.
+	function switchProfile(next: Profile) {
+		setProfile(next);
+		if (next === "math") {
+			if (mode === "node" || mode === "edge" || mode === "line" || mode === "image") setMode("select");
+			setTablePreset("blank");
+		}
+	}
 
 	// track the canvas aspect ratio so the viewBox matches it (no letterboxing)
 	useEffect(() => {
@@ -1753,19 +1796,19 @@ export default function App() {
 					changeMode("select");
 					break;
 				case "p":
-					changeMode("node");
+					if (profile === "cs") changeMode("node");
 					break;
 				case "c":
-					changeMode("edge");
+					if (profile === "cs") changeMode("edge");
 					break;
 				case "l":
-					changeMode("line");
+					if (profile === "cs") changeMode("line");
 					break;
 				case "t":
 					changeMode("text");
 					break;
 				case "i":
-					if (pendingImage) changeMode("image");
+					if (profile === "cs" && pendingImage) changeMode("image");
 					break;
 				case "b":
 					changeMode("table");
@@ -1805,12 +1848,25 @@ export default function App() {
 		}
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [changeMode, dispatch, selection, selectedImageAnnotationId, selectedTable]);
+	}, [changeMode, dispatch, profile, selection, selectedImageAnnotationId, selectedTable]);
 
 	return (
 		<div className="app">
 			<aside className="toolbar">
 				<h1>INFEditor</h1>
+
+				<div className="group profile-group">
+					<span className="group-title">Profile</span>
+					<select
+						className="profile-switcher"
+						value={profile}
+						onChange={(e) => switchProfile(e.target.value as Profile)}
+						aria-label="Toolbar profile"
+					>
+						<option value="cs">CS</option>
+						<option value="math">Math</option>
+					</select>
+				</div>
 
 				<div className="group">
 					<span className="group-title">Mode</span>
@@ -1818,26 +1874,34 @@ export default function App() {
 						<button className={mode === "select" ? "active" : ""} onClick={() => changeMode("select")}>
 							Select <kbd>s</kbd>
 						</button>
-						<button className={mode === "node" ? "active" : ""} onClick={() => changeMode("node")}>
-							Node <kbd>p</kbd>
-						</button>
-						<button className={mode === "edge" ? "active" : ""} onClick={() => changeMode("edge")}>
-							Connect <kbd>c</kbd>
-						</button>
-						<button className={mode === "line" ? "active" : ""} onClick={() => changeMode("line")}>
-							Line <kbd>l</kbd>
-						</button>
+						{profile === "cs" && (
+							<button className={mode === "node" ? "active" : ""} onClick={() => changeMode("node")}>
+								Node <kbd>p</kbd>
+							</button>
+						)}
+						{profile === "cs" && (
+							<button className={mode === "edge" ? "active" : ""} onClick={() => changeMode("edge")}>
+								Connect <kbd>c</kbd>
+							</button>
+						)}
+						{profile === "cs" && (
+							<button className={mode === "line" ? "active" : ""} onClick={() => changeMode("line")}>
+								Line <kbd>l</kbd>
+							</button>
+						)}
 						<button className={mode === "text" ? "active" : ""} onClick={() => changeMode("text")}>
 							Text <kbd>t</kbd>
 						</button>
-						<button
-							className={mode === "image" ? "active" : ""}
-							onClick={() => changeMode("image")}
-							title={pendingImage ? "Click canvas to place image" : "Paste an image first (Ctrl+V)"}
-							disabled={!pendingImage}
-						>
-							Image <kbd>i</kbd>
-						</button>
+						{profile === "cs" && (
+							<button
+								className={mode === "image" ? "active" : ""}
+								onClick={() => changeMode("image")}
+								title={pendingImage ? "Click canvas to place image" : "Paste an image first (Ctrl+V)"}
+								disabled={!pendingImage}
+							>
+								Image <kbd>i</kbd>
+							</button>
+						)}
 						<button className={mode === "table" ? "active" : ""} onClick={() => changeMode("table")}>
 							Table <kbd>b</kbd>
 						</button>
@@ -1850,7 +1914,7 @@ export default function App() {
 					</div>
 				</div>
 
-				{mode === "node" && (
+				{profile === "cs" && mode === "node" && (
 					<div className="group">
 						<span className="group-title">Shape</span>
 						<div className="btn-grid">
@@ -1942,19 +2006,20 @@ export default function App() {
 									["qmc", "QM comb."],
 									["qmp", "QM PI chart"],
 								] as [TablePreset, string][]
-							).map(([p, label]) => (
-								<button
-									key={p}
-									className={tablePreset === p ? "active" : ""}
-									onClick={() => {
-										setTablePreset(p);
-										setPendingCorner(null);
-										setHoverCell(null);
-									}}
-								>
-									{label}
-								</button>
-							))}
+							).filter(([p]) => profile === "cs" || p === "blank")
+								.map(([p, label]) => (
+									<button
+										key={p}
+										className={tablePreset === p ? "active" : ""}
+										onClick={() => {
+											setTablePreset(p);
+											setPendingCorner(null);
+											setHoverCell(null);
+										}}
+									>
+										{label}
+									</button>
+								))}
 						</div>
 						<button onClick={importLatexTable} title="Import a LaTeX tabular from the clipboard">
 							⎘ Paste LaTeX table
@@ -3651,6 +3716,25 @@ export default function App() {
 						<button onClick={() => navigator.clipboard?.writeText(derivToLatex(selectedDeriv))}>Copy LaTeX</button>
 					</>
 				)}
+				{profile === "math" && (selectedText || (selectedDeriv && derivStep != null)) && (
+					<div className="group">
+						<span className="group-title">Math snippets</span>
+						<div className="btn-grid math-snippets">
+							{MATH_SNIPPETS.map((sym) => (
+								<button
+									key={sym.label}
+									onMouseDown={(e) => e.preventDefault()}
+									onClick={() =>
+										Array.isArray(sym.insert) ? insertWrap(sym.insert[0], sym.insert[1]) : insertText(sym.insert)
+									}
+									title={sym.title}
+								>
+									{sym.label}
+								</button>
+							))}
+						</div>
+					</div>
+				)}
 				{((selectedNode && selectedNode.shape !== "dot") ||
 					selectedEdge ||
 					(selectedText && selectedText.kind !== "text") ||
@@ -3658,6 +3742,19 @@ export default function App() {
 					(selectedTable && cellSel) ||
 					(selectedDeriv && derivStep != null)) && (
 					<>
+						<span className="group-title">Symbols</span>
+						<div className="btn-grid">
+							{MATH_SYMBOLS.map((sym) => (
+								<button
+									key={sym.name}
+									onMouseDown={(e) => e.preventDefault()}
+									onClick={() => insertText(sym.latex)}
+									title={sym.title}
+								>
+									{sym.label}
+								</button>
+							))}
+						</div>
 						<span className="group-title">Insert</span>
 						<div className="btn-grid">
 							<button

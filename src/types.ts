@@ -171,6 +171,8 @@ export interface Doc {
 
 export type DerivField = "rel" | "expr" | "reason";
 
+export type Profile = "cs" | "math";
+
 export type Mode = "select" | "node" | "edge" | "line" | "text" | "table" | "image" | "deriv" | "delete";
 
 export type Selection =
