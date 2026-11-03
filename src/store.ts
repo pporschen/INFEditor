@@ -42,6 +42,7 @@ export type Action =
 	| { type: "SET_TEXT_SIZE"; id: string; delta: number }
 	| { type: "SET_TEXT_ALIGN"; id: string; align: "left" | "center" }
 	| { type: "TOGGLE_TEXT_BOLD"; id: string }
+	| { type: "TOGGLE_TEXT_BORDER"; id: string }
 	| { type: "MOVE_TEXT"; id: string; x: number; y: number }
 	| { type: "DELETE_TEXT"; id: string }
 	| { type: "ADD_IMAGE"; id: string; x: number; y: number; w: number; h: number; dataUrl: string }
@@ -362,6 +363,11 @@ function docReducer(doc: Doc, a: Action): Doc {
 			return {
 				...doc,
 				texts: doc.texts.map((t) => (t.id === a.id ? { ...t, bold: !t.bold } : t)),
+			};
+		case "TOGGLE_TEXT_BORDER":
+			return {
+				...doc,
+				texts: doc.texts.map((t) => (t.id === a.id ? { ...t, border: !t.border } : t)),
 			};
 		case "MOVE_TEXT":
 			return {

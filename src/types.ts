@@ -68,6 +68,7 @@ export interface DiagText {
 	size?: number; // font-size multiplier (default 1)
 	align?: "left" | "center";
 	bold?: boolean;
+	border?: boolean; // draw a thin outline around a multi-line text box
 	labelRot?: LabelRotation; // label rotation in 90-degree steps (for kind='label')
 }
 

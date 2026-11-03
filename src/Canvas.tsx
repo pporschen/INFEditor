@@ -1463,6 +1463,16 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 											rx={6}
 										/>
 									)}
+									{t.border && (
+										<rect
+											className="text-box-border"
+											x={(anchor === "middle" ? px - maxW / 2 : px) - 8}
+											y={py - 6}
+											width={maxW + 16}
+											height={boxH}
+											rx={2}
+										/>
+									)}
 									<text
 										key={t.id}
 										x={px}

@@ -485,6 +485,12 @@ button.active kbd {
   fill: var(--accent-soft);
   pointer-events: none;
 }
+.text-box-border {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 0.75;
+  pointer-events: none;
+}
 
 /* free-standing text label */
 .free-text {

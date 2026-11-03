@@ -2688,6 +2688,12 @@ export default function App() {
 							>
 								{selectedText.align === "center" ? "Centered" : "Left"}
 							</button>
+							<button
+								className={selectedText.border ? "active" : ""}
+								onClick={() => dispatch({ type: "TOGGLE_TEXT_BORDER", id: selectedText.id })}
+							>
+								Thin border
+							</button>
 						</div>
 						<span className="group-title">Move (1/4 cell)</span>
 						<div className="dpad">
