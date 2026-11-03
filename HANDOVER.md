@@ -144,9 +144,10 @@ Modes (keyboard): Select `s`, Node `p`, Connect `c`, Line `l`, Text `t`, Table
   Math hides those CS-specific tools and the right-toolbar symbol palettes.
 - **Math symbols popup** (Math profile, `src/MathPalette.tsx`): floating palette
   toggled with the `Σ Symbols` button or `m`, dragged by its title bar. Open
-  state and position persist in `localStorage`. Math symbols only (Σ, Σ with
-  limits, ∫, √, x², x₂, ×, ÷, ·, ≠, ≤, ≥, ∞, ∈, →, ⇒, α, β, π, parentheses); it
-  inserts into the focused label field like the inspector palettes.
+  state and position persist in `localStorage`. Two sections: **Math** (Σ, Σ
+  with limits, ∫, √, x², x₂, ×, ÷, ·, ≠, ≤, ≥, ∞, ∈, →, α, β, π, parentheses)
+  and **Logic** (¬, overline, ∧, ∨, ⊕, ⇒, ⇔, ≡, ∀, ∃, ⊤, ⊥); it inserts into
+  the focused label field like the inspector palettes.
 - **Node** shapes: State (2 corners → ellipse), Box (2 corners), Junction dot
   (single dwell). **Table**: Blank (2-corner draw) or Truth 2/3/4 (single dwell,
   fixed size). **Line/Text/Deriv**: place then edit.

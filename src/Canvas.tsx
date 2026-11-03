@@ -18,6 +18,7 @@ function rotTransform(rot: 0 | 90 | 180 | 270 | undefined, cx: number, cy: numbe
 //   operators        \cdot · \oplus ⊕ \lnot/\neg ¬ \lor/\vee ∨ \land/\wedge ∧
 //                    \sum Σ  \int ∫  \sqrt{x}  \leq ≤  \geq ≥  \times ×  \div ÷
 //                    \in ∈  \infty ∞  \rightarrow →  \alpha α  \beta β  \pi π
+//                    \forall ∀  \exists ∃  \top ⊤  \bot ⊥
 // Anything else passes through unchanged.
 const OP: Record<string, string> = {
 	cdot: "·",
@@ -49,6 +50,10 @@ const OP: Record<string, string> = {
 	pi: "π",
 	ss: "ß",
 	sum: "Σ",
+	forall: "∀",
+	exists: "∃",
+	top: "⊤",
+	bot: "⊥",
 };
 
 const BINARY_OPS = new Set([
@@ -161,7 +166,7 @@ export function renderRich(s: string, compact = false): ReactNode {
 				continue;
 			}
 			const m =
-				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|rightarrow|Leftrightarrow|implies|iff|left|right|neq|equiv|leq|geq|times|div|infty|int|in|alpha|beta|pi|ss|sum|sqrt)/.exec(
+				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|rightarrow|Leftrightarrow|implies|iff|left|right|neq|equiv|leq|geq|times|div|infty|int|in|alpha|beta|pi|ss|sum|sqrt|forall|exists|top|bot)/.exec(
 					s.slice(i),
 				);
 			if (m) {

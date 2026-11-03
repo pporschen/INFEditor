@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 
 const POS_KEY = "infeditor.mathPalette.pos.v1";
 
-// Math-only symbols for the floating palette (Math profile). A string is
-// inserted at the caret; a [pre, post] pair wraps the selection.
-const MATH_SYMBOLS: { label: string; insert: string | [string, string]; title: string }[] = [
+// Symbols for the floating palette (Math profile). A string is inserted at
+// the caret; a [pre, post] pair wraps the selection.
+type Sym = { label: string; insert: string | [string, string]; title: string };
+
+const MATH_SYMBOLS: Sym[] = [
 	{ label: "Σ", insert: "\\sum ", title: "Summation \\sum" },
 	{ label: "Σ↕", insert: ["\\sum_{", "}^{}"], title: "Summation with limits \\sum_{ }^{ }" },
 	{ label: "∫", insert: "\\int ", title: "Integral \\int" },
@@ -20,11 +22,30 @@ const MATH_SYMBOLS: { label: string; insert: string | [string, string]; title: s
 	{ label: "∞", insert: "\\infty ", title: "Infinity \\infty" },
 	{ label: "∈", insert: "\\in ", title: "Element \\in" },
 	{ label: "→", insert: "\\rightarrow ", title: "Right arrow \\rightarrow" },
-	{ label: "⇒", insert: "\\Rightarrow ", title: "Implies \\Rightarrow" },
 	{ label: "α", insert: "\\alpha ", title: "Alpha \\alpha" },
 	{ label: "β", insert: "\\beta ", title: "Beta \\beta" },
 	{ label: "π", insert: "\\pi ", title: "Pi \\pi" },
 	{ label: "( )", insert: ["(", ")"], title: "Parentheses ( )" },
+];
+
+const LOGIC_SYMBOLS: Sym[] = [
+	{ label: "¬", insert: "\\lnot ", title: "Not \\lnot" },
+	{ label: "A̅", insert: ["\\overline{", "}"], title: "Negation bar \\overline{ }" },
+	{ label: "∧", insert: "\\land ", title: "And \\land" },
+	{ label: "∨", insert: "\\lor ", title: "Or \\lor" },
+	{ label: "⊕", insert: "\\oplus ", title: "Xor \\oplus" },
+	{ label: "⇒", insert: "\\Rightarrow ", title: "Implies \\Rightarrow" },
+	{ label: "⇔", insert: "\\Leftrightarrow ", title: "If and only if \\Leftrightarrow" },
+	{ label: "≡", insert: "\\equiv ", title: "Equivalent \\equiv" },
+	{ label: "∀", insert: "\\forall ", title: "For all \\forall" },
+	{ label: "∃", insert: "\\exists ", title: "Exists \\exists" },
+	{ label: "⊤", insert: "\\top ", title: "True \\top" },
+	{ label: "⊥", insert: "\\bot ", title: "False \\bot" },
+];
+
+const SECTIONS: { title: string; symbols: Sym[] }[] = [
+	{ title: "Math", symbols: MATH_SYMBOLS },
+	{ title: "Logic", symbols: LOGIC_SYMBOLS },
 ];
 
 type Pos = { x: number; y: number };
@@ -104,22 +125,29 @@ export function MathPalette({
 				onPointerUp={onPointerUp}
 				onPointerCancel={onPointerUp}
 			>
-				<span>⠿ Math symbols</span>
+				<span>⠿ Symbols</span>
 				<button onClick={onClose} title="Close (m)">
 					✕
 				</button>
 			</div>
-			<div className="math-palette-grid">
-				{MATH_SYMBOLS.map((sym) => (
-					<button
-						key={sym.label}
-						title={sym.title}
-						onClick={() => (Array.isArray(sym.insert) ? onWrap(sym.insert[0], sym.insert[1]) : onInsert(sym.insert))}
-					>
-						{sym.label}
-					</button>
-				))}
-			</div>
+			{SECTIONS.map((sec) => (
+				<div key={sec.title}>
+					<div className="math-palette-section">{sec.title}</div>
+					<div className="math-palette-grid">
+						{sec.symbols.map((sym) => (
+							<button
+								key={sym.label}
+								title={sym.title}
+								onClick={() =>
+									Array.isArray(sym.insert) ? onWrap(sym.insert[0], sym.insert[1]) : onInsert(sym.insert)
+								}
+							>
+								{sym.label}
+							</button>
+						))}
+					</div>
+				</div>
+			))}
 		</div>
 	);
 }

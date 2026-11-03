@@ -102,7 +102,14 @@ body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
-  padding: 8px;
+  padding: 0 8px 8px;
+}
+.math-palette-section {
+  padding: 8px 12px 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .math-palette button {
   justify-content: center;
