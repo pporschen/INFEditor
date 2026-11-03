@@ -659,7 +659,12 @@ export default function App() {
 	}
 
 	function resetView() {
-		setView({ x: -GRID, y: -GRID, w: DEFAULT_VIEW_W });
+		const w = DEFAULT_VIEW_W;
+		const h = w * aspect;
+		// Center the A4 page area in the viewport.
+		const x = (PAGE_W - w) / 2;
+		const y = (PAGE_H - h) / 2;
+		setView({ x, y, w });
 	}
 
 	function jumpToPage(index: number) {
