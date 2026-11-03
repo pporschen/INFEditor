@@ -9,6 +9,8 @@ import { MathPalette } from "./MathPalette";
 import { GRID, W, H, PAGE_W, PAGE_H, PAGE_MARGIN, pageTop, halfExtents } from "./geometry";
 import { tableToLatex, derivToLatex } from "./latex";
 import { kvHeaderRow, kvHeaderCol } from "./kv";
+import { newId } from "./id";
+import { serverExportsAvailable, storeOnServer, EXPORTS_LISTING_URL } from "./serverExports";
 import type {
 	Doc,
 	DiagTable,
@@ -130,7 +132,7 @@ function loadInitialWorkspace(): WorkspaceSnapshot {
 			const parsed = JSON.parse(raw) as { tabs?: Array<{ id?: string; doc?: unknown }>; activeId?: string };
 			const tabs: DocTab[] = (parsed.tabs ?? [])
 				.map((t) => ({
-					id: typeof t?.id === "string" && t.id ? t.id : crypto.randomUUID(),
+					id: typeof t?.id === "string" && t.id ? t.id : newId(),
 					doc: normalizeDoc(t?.doc),
 				}))
 				.filter((t) => !!t.id);
@@ -153,7 +155,7 @@ function loadInitialWorkspace(): WorkspaceSnapshot {
 	} catch {
 		/* ignore corrupt autosave */
 	}
-	const id = crypto.randomUUID();
+	const id = newId();
 	return {
 		tabs: [{ id, doc: legacy }],
 		activeId: id,
@@ -318,6 +320,10 @@ export default function App() {
 		col: number;
 	} | null>(null);
 	const [tableColor, setTableColor] = useState("#f59e0b");
+	const [hasServerExports, setHasServerExports] = useState(false);
+	useEffect(() => {
+		void serverExportsAvailable().then(setHasServerExports);
+	}, []);
 	const [printIdentity, setPrintIdentity] = useState(() => {
 		try {
 			const saved = JSON.parse(localStorage.getItem(PRINT_IDENTITY_KEY) ?? "{}") as {
@@ -464,7 +470,7 @@ export default function App() {
 	}
 
 	function newTab() {
-		const id = crypto.randomUUID();
+		const id = newId();
 		const fresh = normalizeDoc(null);
 		setTabs((prev) => [...prev, { id, doc: fresh }]);
 		setActiveTabId(id);
@@ -688,7 +694,7 @@ export default function App() {
 				alert("No \\begin{tabular}…\\end{tabular} found to import.");
 				return;
 			}
-			const id = crypto.randomUUID();
+			const id = newId();
 			dispatch({
 				type: "ADD_TABLE",
 				table: {
@@ -705,8 +711,9 @@ export default function App() {
 			setCellSel({ id, row: 0, col: 0 });
 			focusLabelRef.current = true;
 		};
-		navigator.clipboard
-			.readText()
+		// navigator.clipboard is undefined outside secure contexts (plain-http
+		// homelab) — go straight to the prompt fallback there.
+		(navigator.clipboard?.readText() ?? Promise.reject())
 			.then(place)
 			.catch(() => {
 				const txt = window.prompt("Paste the LaTeX tabular here:");
@@ -734,6 +741,7 @@ export default function App() {
 		a.download = filename;
 		a.click();
 		URL.revokeObjectURL(url);
+		void storeOnServer(filename, blob);
 	}
 
 	// Open a previously saved .json file and replace the document with it.
@@ -750,7 +758,7 @@ export default function App() {
 					.replace(/\.json$/i, "")
 					.trim();
 				if (!loaded.name && fileBase) loaded = { ...loaded, name: fileBase };
-				const id = crypto.randomUUID();
+				const id = newId();
 				setTabs((prev) => [...prev, { id, doc: loaded }]);
 				setActiveTabId(id);
 				dispatch({ type: "LOAD", doc: loaded });
@@ -786,7 +794,7 @@ export default function App() {
 		if (mode === "node") {
 			// Junction dots drop with a single dwell; stay in the mode to place more.
 			if (shape === "dot") {
-				dispatch({ type: "ADD_DOT", id: crypto.randomUUID(), x: gx, y: gy });
+				dispatch({ type: "ADD_DOT", id: newId(), x: gx, y: gy });
 				return;
 			}
 			// States, boxes, ASM boxes, and decision diamonds are drawn from two opposite corners.
@@ -798,7 +806,7 @@ export default function App() {
 				setPendingCorner(null);
 				setHoverCell(null);
 				if (pendingCorner.x !== gx && pendingCorner.y !== gy) {
-					const id = crypto.randomUUID();
+					const id = newId();
 					dispatch({
 						type: "ADD_SHAPE",
 						id,
@@ -827,7 +835,7 @@ export default function App() {
 					// away (edit it later via Select mode)
 					dispatch({
 						type: "ADD_LINE",
-						id: crypto.randomUUID(),
+						id: newId(),
 						x1: pendingCorner.x,
 						y1: pendingCorner.y,
 						x2: gx,
@@ -837,7 +845,7 @@ export default function App() {
 			}
 		} else if (mode === "text") {
 			// drop a text label / block, then focus it for immediate typing
-			const id = crypto.randomUUID();
+			const id = newId();
 			dispatch({ type: "ADD_TEXT", id, x: gx, y: gy, kind: textKind });
 			returnModeRef.current = "text";
 			setMode("select");
@@ -846,7 +854,7 @@ export default function App() {
 		} else if (mode === "image") {
 			// place the pasted image at the clicked location
 			if (pendingImage) {
-				const id = crypto.randomUUID();
+				const id = newId();
 				// default image size: 10x10 grid cells (caller can resize in inspector)
 				dispatch({
 					type: "ADD_IMAGE",
@@ -865,7 +873,7 @@ export default function App() {
 		} else if (mode === "table") {
 			if (tablePreset !== "blank") {
 				// table presets place with one dwell; KV opens a setup modal first
-				const id = crypto.randomUUID();
+				const id = newId();
 				if (tablePreset === "kv3" || tablePreset === "kv4") {
 					const kv = tablePreset === "kv3" ? 3 : 4;
 					setKvSetup({
@@ -893,7 +901,7 @@ export default function App() {
 				const cols = Math.abs(gx - pendingCorner.x);
 				const rows = Math.abs(gy - pendingCorner.y);
 				if (cols > 0 && rows > 0) {
-					const id = crypto.randomUUID();
+					const id = newId();
 					const x0 = Math.min(pendingCorner.x, gx);
 					const y0 = Math.min(pendingCorner.y, gy);
 					dispatch({
@@ -916,7 +924,7 @@ export default function App() {
 				}
 			}
 		} else if (mode === "deriv") {
-			const id = crypto.randomUUID();
+			const id = newId();
 			dispatch({
 				type: "ADD_DERIV",
 				derivation: {
@@ -1012,7 +1020,7 @@ export default function App() {
 	function handleImagePointClick(id: string, x: number, y: number) {
 		if (!selectedImage || selectedImage.id !== id || !imageAnnotateMode) return;
 		if (imageAnnotateMode === "text") {
-			const annotationId = crypto.randomUUID();
+			const annotationId = newId();
 			dispatch({ type: "ADD_IMAGE_TEXT", id, annotationId, x, y });
 			setSelectedImageAnnotationId(annotationId);
 			setImageAnnotateMode(null);
@@ -1023,7 +1031,7 @@ export default function App() {
 			return;
 		}
 		if (pendingImagePoint.x === x && pendingImagePoint.y === y) return;
-		const annotationId = crypto.randomUUID();
+		const annotationId = newId();
 		dispatch({
 			type: "ADD_IMAGE_LINE",
 			id,
@@ -1115,7 +1123,7 @@ export default function App() {
 					type: "ADD_TABLE_LOOP",
 					id,
 					loop: {
-						id: crypto.randomUUID(),
+						id: newId(),
 						r1: Math.min(loopFirst.row, row),
 						c1: Math.min(loopFirst.col, col),
 						r2: Math.max(loopFirst.row, row),
@@ -1191,7 +1199,7 @@ export default function App() {
 				setPendingFrom(id);
 			} else {
 				// create the arrow, then open its edit menu (label + curvature)
-				const edgeId = crypto.randomUUID();
+				const edgeId = newId();
 				dispatch({ type: "ADD_EDGE", id: edgeId, from: pendingFrom, to: id });
 				setPendingFrom(null);
 				returnModeRef.current = "edge";
@@ -2142,7 +2150,11 @@ export default function App() {
 							Print PDF
 						</button>
 						<button
-							onClick={() => svgRef.current && exportPng(svgRef.current)}
+							onClick={() => {
+								if (!svgRef.current) return;
+								const filename = `${doc.name || activeTabLabel()}.png`;
+								exportPng(svgRef.current, filename, (blob) => void storeOnServer(filename, blob));
+							}}
 							title="Export all content as a PNG image"
 						>
 							PNG
@@ -2155,6 +2167,14 @@ export default function App() {
 						onChange={handleLoadFile}
 						style={{ display: "none" }}
 					/>
+					{hasServerExports && (
+						<p className="muted">
+							Save and PNG also store a copy on the server —{" "}
+							<a href={EXPORTS_LISTING_URL} target="_blank" rel="noreferrer">
+								view exports
+							</a>
+						</p>
+					)}
 				</div>
 
 				<div className="hint">

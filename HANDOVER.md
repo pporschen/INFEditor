@@ -44,6 +44,21 @@ Live: **https://pporschen.github.io/INFEditor/**
   builds and publishes `dist/` to GitHub Pages. Pages **Source must be
   "GitHub Actions"** in repo Settings (already set). `dist/` and `node_modules/`
   are gitignored.
+- **Homelab**: runs in its own Proxmox LXC with Docker. `Dockerfile` builds the
+  app and serves it from nginx on plain HTTP port 80 (LAN only, no TLS — static
+  page, no login). **Server exports**: nginx accepts PUT uploads at `/exports/`
+  (no delete) and lists them there; the LXC folder is `/opt/infeditor-exports`
+  (`EXPORTS_PATH`). The app probes `exports/` on startup
+  (`src/serverExports.ts`) and only then also stores Save (.infedit.json) and
+  PNG copies there, same name overwrites — on GitHub Pages / `file://` the
+  probe fails and it stays download-only. Print PDF is not captured (the
+  browser makes the PDF). First time in the LXC: `git clone
+  https://github.com/pporschen/INFEditor.git && cd INFEditor && docker compose
+  up -d --build`. Update: `cd INFEditor && git pull && docker compose up -d
+  --build`.
+- **Dev container**: `.devcontainer/` (Node 20). Pushing from it needs the
+  deploy key at `~/.ssh/infeditor_deploy` on the WSL host (mounted in; the
+  remote uses the `github-infeditor` SSH host alias).
 
 ## Architecture (`src/`)
 
