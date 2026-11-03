@@ -330,6 +330,8 @@ export default function App() {
 	const svgRef = useRef<SVGSVGElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const labelInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+	const expandedTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+	const expandedInputRef = useRef<HTMLInputElement | null>(null);
 	const expandedApplyRef = useRef<(value: string) => void>(() => {});
 	const [expandedEditor, setExpandedEditor] = useState<{
 		title: string;
@@ -1433,7 +1435,13 @@ export default function App() {
 	}
 
 	// Write to whichever label field is currently being edited.
+	// When the expanded editor modal is open, route through its apply callback
+	// so the modal value and the underlying object stay in sync.
 	function setActiveLabel(text: string) {
+		if (expandedEditor) {
+			setExpandedValue(text);
+			return;
+		}
 		if (selection?.kind === "node") dispatch({ type: "SET_NODE_LABEL", id: selection.id, label: text });
 		else if (selection?.kind === "edge") dispatch({ type: "SET_EDGE_LABEL", id: selection.id, label: text });
 		else if (selection?.kind === "text") dispatch({ type: "SET_TEXT", id: selection.id, text });
@@ -1446,9 +1454,13 @@ export default function App() {
 
 	// The label input currently focused (palette buttons keep focus via
 	// onMouseDown preventDefault, so this stays the field being edited).
+	// When the expanded editor is open, prefer its input even if a side panel
+	// field happens to hold focus.
 	function activeInput(): HTMLInputElement | HTMLTextAreaElement | null {
+		if (expandedEditor) return expandedTextareaRef.current ?? expandedInputRef.current;
 		const el = document.activeElement;
-		return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el : labelInputRef.current;
+		if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el;
+		return labelInputRef.current;
 	}
 
 	// Wrap the selection with pre/post, caret left just before `post`.
@@ -2212,6 +2224,7 @@ export default function App() {
 							</div>
 							{expandedEditor.multiline ? (
 								<textarea
+									ref={expandedTextareaRef}
 									autoFocus
 									className="editor-modal-input"
 									rows={10}
@@ -2223,6 +2236,7 @@ export default function App() {
 								/>
 							) : (
 								<input
+									ref={expandedInputRef}
 									autoFocus
 									className="editor-modal-input"
 									value={expandedEditor.value}
