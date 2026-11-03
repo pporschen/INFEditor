@@ -130,6 +130,7 @@ A **Symbols** palette (shown when a label field is focused) inserts math glyphs
 palette inserts these:
 `A̅ NOT`, `· AND`, `+ OR`, `⊕ XOR`, `( )`, `x²`, `x₂`. Both target whichever input
 is focused via `document.activeElement` (`onMouseDown preventDefault` keeps focus).
+Both are CS-profile only; the Math profile uses the floating palette below.
 
 ## Modes & interaction
 
@@ -140,8 +141,12 @@ Modes (keyboard): Select `s`, Node `p`, Connect `c`, Line `l`, Text `t`, Table
   **Math** toolbar layouts. The choice is persisted to `localStorage` and only
   affects toolbar visibility — documents, canvas, and exports stay unchanged.
   CS shows Node/Connect/Line/Image modes, the shape picker, and all table presets;
-  Math hides those CS-specific tools. In Math profile, a **Math snippets** palette
-  appears in the right toolbar whenever a text item or derivation step is selected.
+  Math hides those CS-specific tools and the right-toolbar symbol palettes.
+- **Math symbols popup** (Math profile, `src/MathPalette.tsx`): floating palette
+  toggled with the `Σ Symbols` button or `m`, dragged by its title bar. Open
+  state and position persist in `localStorage`. Math symbols only (Σ, Σ with
+  limits, ∫, √, x², x₂, ×, ÷, ·, ≠, ≤, ≥, ∞, ∈, →, ⇒, α, β, π, parentheses); it
+  inserts into the focused label field like the inspector palettes.
 - **Node** shapes: State (2 corners → ellipse), Box (2 corners), Junction dot
   (single dwell). **Table**: Blank (2-corner draw) or Truth 2/3/4 (single dwell,
   fixed size). **Line/Text/Deriv**: place then edit.

@@ -5,6 +5,7 @@ import { useEditor } from "./store";
 import { exportPng } from "./exportPng";
 import { printA4 } from "./printA4";
 import { GATES, GATE_ORDER } from "./gates";
+import { MathPalette } from "./MathPalette";
 import { GRID, W, H, PAGE_W, PAGE_H, PAGE_MARGIN, pageTop, halfExtents } from "./geometry";
 import { tableToLatex, derivToLatex } from "./latex";
 import { kvHeaderRow, kvHeaderCol } from "./kv";
@@ -26,6 +27,7 @@ const STORAGE_KEY = "infeditor.doc.v1";
 const WORKSPACE_KEY = "infeditor.workspace.v1";
 const PRINT_IDENTITY_KEY = "infeditor.printIdentity.v1";
 const PROFILE_KEY = "infeditor.profile.v1";
+const MATH_PALETTE_KEY = "infeditor.mathPalette.open.v1";
 const CURVE_STEP = 24; // pixels of bow added per button press
 const CURVE_MAX = 168; // clamp so arcs stay reasonable
 const LOOP_SIZE_MIN = -18; // clamp for self-loop extra size (keeps a visible loop)
@@ -90,24 +92,6 @@ const REL_TYPES: { rel: RelType; label: string }[] = [
 const MATH_SYMBOLS = [
 	{ name: "sum", label: "Σ", latex: "\\sum ", title: "Summation \\sum" },
 ] as const;
-
-// Quick math snippets shown in the math-focused toolbar profile.
-const MATH_SNIPPETS: { label: string; insert: string | [string, string]; title: string }[] = [
-	{ label: "Σ", insert: "\\sum ", title: "Summation \\sum" },
-	{ label: "∫", insert: "\\int ", title: "Integral \\int" },
-	{ label: "√", insert: ["\\sqrt{", "}"], title: "Square root \\sqrt{ }" },
-	{ label: "×", insert: "\\times ", title: "Times \\times" },
-	{ label: "÷", insert: "\\div ", title: "Divides \\div" },
-	{ label: "∞", insert: "\\infty ", title: "Infinity \\infty" },
-	{ label: "∈", insert: "\\in ", title: "Element \\in" },
-	{ label: "→", insert: "\\rightarrow ", title: "Right arrow \\rightarrow" },
-	{ label: "≠", insert: "\\neq ", title: "Not equal \\neq" },
-	{ label: "≤", insert: "\\leq ", title: "Less or equal \\leq" },
-	{ label: "≥", insert: "\\geq ", title: "Greater or equal \\geq" },
-	{ label: "α", insert: "\\alpha ", title: "Alpha \\alpha" },
-	{ label: "β", insert: "\\beta ", title: "Beta \\beta" },
-	{ label: "π", insert: "\\pi ", title: "Pi \\pi" },
-];
 
 // Coerce parsed JSON into a valid Doc, tolerating saves from before a
 // collection existed. Shared by autosave restore and file open.
@@ -302,6 +286,8 @@ export default function App() {
 		const saved = localStorage.getItem(PROFILE_KEY);
 		return saved === "cs" || saved === "math" ? saved : "cs";
 	});
+	// floating math symbol palette (Math profile only)
+	const [mathPaletteOpen, setMathPaletteOpen] = useState(() => localStorage.getItem(MATH_PALETTE_KEY) !== "0");
 	const [selection, setSelection] = useState<Selection>(null);
 	// group multi-select: while `multiMode` is on, each dwell toggles a part into
 	// `multi` (refs `{kind,id}`) so several items can be nudged together.
@@ -394,6 +380,10 @@ export default function App() {
 	useEffect(() => {
 		localStorage.setItem(PROFILE_KEY, profile);
 	}, [profile]);
+
+	useEffect(() => {
+		localStorage.setItem(MATH_PALETTE_KEY, mathPaletteOpen ? "1" : "0");
+	}, [mathPaletteOpen]);
 
 	// Keep the current mode/table preset valid when switching to the
 	// math-focused profile. Done on the switch only, so a pasted image can
@@ -1824,6 +1814,9 @@ export default function App() {
 				case "d":
 					changeMode("delete");
 					break;
+				case "m":
+					if (profile === "math") setMathPaletteOpen((o) => !o);
+					break;
 				case "Escape":
 					setPendingFrom(null);
 					setPendingCorner(null);
@@ -1871,6 +1864,15 @@ export default function App() {
 						<option value="cs">CS</option>
 						<option value="math">Math</option>
 					</select>
+					{profile === "math" && (
+						<button
+							className={mathPaletteOpen ? "active" : ""}
+							onMouseDown={(e) => e.preventDefault()}
+							onClick={() => setMathPaletteOpen((o) => !o)}
+						>
+							Σ Symbols <kbd>m</kbd>
+						</button>
+					)}
 				</div>
 
 				<div className="group">
@@ -2270,6 +2272,9 @@ export default function App() {
 						</div>
 					</div>
 				</div>
+				{profile === "math" && mathPaletteOpen && (
+					<MathPalette onInsert={insertText} onWrap={insertWrap} onClose={() => setMathPaletteOpen(false)} />
+				)}
 				{expandedEditor && (
 					<div className="editor-modal-backdrop" onClick={() => setExpandedEditor(null)}>
 						<div className="editor-modal" onClick={(e) => e.stopPropagation()}>
@@ -3721,31 +3726,14 @@ export default function App() {
 						<button onClick={() => navigator.clipboard?.writeText(derivToLatex(selectedDeriv))}>Copy LaTeX</button>
 					</>
 				)}
-				{profile === "math" && (selectedText || (selectedDeriv && derivStep != null)) && (
-					<div className="group">
-						<span className="group-title">Math snippets</span>
-						<div className="btn-grid math-snippets">
-							{MATH_SNIPPETS.map((sym) => (
-								<button
-									key={sym.label}
-									onMouseDown={(e) => e.preventDefault()}
-									onClick={() =>
-										Array.isArray(sym.insert) ? insertWrap(sym.insert[0], sym.insert[1]) : insertText(sym.insert)
-									}
-									title={sym.title}
-								>
-									{sym.label}
-								</button>
-							))}
-						</div>
-					</div>
-				)}
-				{((selectedNode && selectedNode.shape !== "dot") ||
-					selectedEdge ||
-					(selectedText && selectedText.kind !== "text") ||
-					selectedLineId ||
-					(selectedTable && cellSel) ||
-					(selectedDeriv && derivStep != null)) && (
+				{/* in the Math profile, symbols live in the floating MathPalette */}
+				{profile === "cs" &&
+					((selectedNode && selectedNode.shape !== "dot") ||
+						selectedEdge ||
+						(selectedText && selectedText.kind !== "text") ||
+						selectedLineId ||
+						(selectedTable && cellSel) ||
+						(selectedDeriv && derivStep != null)) && (
 					<>
 						<span className="group-title">Symbols</span>
 						<div className="btn-grid">
