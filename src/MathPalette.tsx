@@ -20,7 +20,6 @@ const MATH_SYMBOLS: Sym[] = [
 	{ label: "≤", insert: "\\leq ", title: "Less or equal \\leq" },
 	{ label: "≥", insert: "\\geq ", title: "Greater or equal \\geq" },
 	{ label: "∞", insert: "\\infty ", title: "Infinity \\infty" },
-	{ label: "∈", insert: "\\in ", title: "Element \\in" },
 	{ label: "→", insert: "\\rightarrow ", title: "Right arrow \\rightarrow" },
 	{ label: "α", insert: "\\alpha ", title: "Alpha \\alpha" },
 	{ label: "β", insert: "\\beta ", title: "Beta \\beta" },
@@ -43,8 +42,27 @@ const LOGIC_SYMBOLS: Sym[] = [
 	{ label: "⊥", insert: "\\bot ", title: "False \\bot" },
 ];
 
+const SET_SYMBOLS: Sym[] = [
+	{ label: "ℕ", insert: "\\mathbb{N}", title: "Natural numbers \\mathbb{N}" },
+	{ label: "ℤ", insert: "\\mathbb{Z}", title: "Integers \\mathbb{Z}" },
+	{ label: "ℚ", insert: "\\mathbb{Q}", title: "Rationals \\mathbb{Q}" },
+	{ label: "ℝ", insert: "\\mathbb{R}", title: "Reals \\mathbb{R}" },
+	{ label: "ℂ", insert: "\\mathbb{C}", title: "Complex numbers \\mathbb{C}" },
+	{ label: "∈", insert: "\\in ", title: "Element \\in" },
+	{ label: "∉", insert: "\\notin ", title: "Not element \\notin" },
+	{ label: "⊂", insert: "\\subset ", title: "Subset \\subset" },
+	{ label: "⊆", insert: "\\subseteq ", title: "Subset or equal \\subseteq" },
+	{ label: "∪", insert: "\\cup ", title: "Union \\cup" },
+	{ label: "∩", insert: "\\cap ", title: "Intersection \\cap" },
+	{ label: "∖", insert: "\\setminus ", title: "Set difference \\setminus" },
+	{ label: "∅", insert: "\\emptyset ", title: "Empty set \\emptyset" },
+	{ label: "{ }", insert: ["\\{", "\\}"], title: "Set braces \\{ \\}" },
+	{ label: "|", insert: " | ", title: "Such that |" },
+];
+
 const SECTIONS: { title: string; symbols: Sym[] }[] = [
 	{ title: "Math", symbols: MATH_SYMBOLS },
+	{ title: "Sets", symbols: SET_SYMBOLS },
 	{ title: "Logic", symbols: LOGIC_SYMBOLS },
 ];
 

@@ -19,6 +19,8 @@ function rotTransform(rot: 0 | 90 | 180 | 270 | undefined, cx: number, cy: numbe
 //                    \sum Σ  \int ∫  \sqrt{x}  \leq ≤  \geq ≥  \times ×  \div ÷
 //                    \in ∈  \infty ∞  \rightarrow →  \alpha α  \beta β  \pi π
 //                    \forall ∀  \exists ∃  \top ⊤  \bot ⊥
+//   sets             \mathbb{N} ℕ  \notin ∉  \subset ⊂  \subseteq ⊆  \cup ∪
+//                    \cap ∩  \setminus ∖  \emptyset ∅  \{ \} literal braces
 // Anything else passes through unchanged.
 const OP: Record<string, string> = {
 	cdot: "·",
@@ -54,6 +56,23 @@ const OP: Record<string, string> = {
 	exists: "∃",
 	top: "⊤",
 	bot: "⊥",
+	notin: "∉",
+	subset: "⊂",
+	subseteq: "⊆",
+	cup: "∪",
+	cap: "∩",
+	setminus: "∖",
+	emptyset: "∅",
+};
+
+// \mathbb{X} → double-struck number set letter
+const BLACKBOARD: Record<string, string> = {
+	N: "ℕ",
+	Z: "ℤ",
+	Q: "ℚ",
+	R: "ℝ",
+	C: "ℂ",
+	P: "ℙ",
 };
 
 const BINARY_OPS = new Set([
@@ -77,6 +96,12 @@ const BINARY_OPS = new Set([
 	"times",
 	"div",
 	"in",
+	"notin",
+	"subset",
+	"subseteq",
+	"cup",
+	"cap",
+	"setminus",
 ]);
 const MATH_SPACE = "\u2002";
 // sub/superscripts use a thin space instead, and never two in a row
@@ -130,6 +155,10 @@ export function renderRich(s: string, compact = false): ReactNode {
 			let depth = 1;
 			const start = i;
 			while (i < s.length && depth > 0) {
+				if (s[i] === "\\") {
+					i += 2; // escaped char (\{ \} \\ …) never opens/closes a group
+					continue;
+				}
 				if (s[i] === "{") depth++;
 				else if (s[i] === "}") {
 					depth--;
@@ -152,8 +181,8 @@ export function renderRich(s: string, compact = false): ReactNode {
 			continue;
 		}
 		if (ch === "\\") {
-			// Escaped literal markup characters
-			if (s[i + 1] === "_" || s[i + 1] === "^") {
+			// Escaped literal markup characters (\{ \} are set braces)
+			if (s[i + 1] === "_" || s[i + 1] === "^" || s[i + 1] === "{" || s[i + 1] === "}") {
 				buf += s[i + 1];
 				i += 2;
 				continue;
@@ -166,13 +195,17 @@ export function renderRich(s: string, compact = false): ReactNode {
 				continue;
 			}
 			const m =
-				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|rightarrow|Leftrightarrow|implies|iff|left|right|neq|equiv|leq|geq|times|div|infty|int|in|alpha|beta|pi|ss|sum|sqrt|forall|exists|top|bot)/.exec(
+				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|rightarrow|Leftrightarrow|implies|iff|left|right|neq|equiv|leq|geq|times|div|infty|int|in|alpha|beta|pi|ss|sum|sqrt|forall|exists|top|bot|mathbb|notin|subseteq|subset|cup|cap|emptyset|setminus)/.exec(
 					s.slice(i),
 				);
 			if (m) {
 				const cmd = m[1];
 				i += m[0].length;
-				if (cmd === "overline" || cmd === "bar") {
+				if (cmd === "mathbb") {
+					// number sets: \mathbb{N} → ℕ (other letters pass through)
+					const inner = readArg();
+					buf += BLACKBOARD[inner] ?? inner;
+				} else if (cmd === "overline" || cmd === "bar") {
 					const inner = readArg();
 					if (cmd === "bar") {
 						buf += overlineString(inner);
@@ -314,6 +347,10 @@ export function splitOnTopLevelBreaks(s: string): { lines: string[]; offsets: nu
 				last = i + 2;
 			}
 			i += 2;
+			continue;
+		}
+		if (ch === "\\" && (s[i + 1] === "{" || s[i + 1] === "}")) {
+			i += 2; // literal set braces don't affect grouping
 			continue;
 		}
 		if (ch === "\r" || ch === "\n") {

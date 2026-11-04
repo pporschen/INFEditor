@@ -160,8 +160,9 @@ Modes (keyboard): Select `s`, Node `p`, Connect `c`, Line `l`, Text `t`, Table
   Image placement is available in both profiles.
 - **Math symbols popup** (Math profile, `src/MathPalette.tsx`): floating palette
   toggled with the `Σ Symbols` button or `m`, dragged by its title bar. Open
-  state and position persist in `localStorage`. Two sections: **Math** (Σ, Σ
-  with limits, ∫, √, x², x₂, ×, ÷, ·, ≠, ≤, ≥, ∞, ∈, →, α, β, π, parentheses)
+  state and position persist in `localStorage`. Three sections: **Math** (Σ, Σ
+  with limits, ∫, √, x², x₂, ×, ÷, ·, ≠, ≤, ≥, ∞, →, α, β, π, parentheses),
+  **Sets** (ℕ ℤ ℚ ℝ ℂ via `\mathbb{}`, ∈, ∉, ⊂, ⊆, ∪, ∩, ∖, ∅, `\{ \}`, `|`)
   and **Logic** (¬, overline, ∧, ∨, ⊕, ⇒, ⇔, ≡, ∀, ∃, ⊤, ⊥); it inserts into
   the focused label field like the inspector palettes.
 - **Node** shapes: State (2 corners → ellipse), Box (2 corners), Junction dot

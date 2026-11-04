@@ -78,6 +78,8 @@ body {
   position: fixed;
   z-index: 40;
   width: 280px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--panel);
