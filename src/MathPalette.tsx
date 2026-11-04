@@ -17,6 +17,8 @@ const MATH_SYMBOLS: Sym[] = [
 	{ label: "÷", insert: "\\div ", title: "Divides \\div" },
 	{ label: "·", insert: "\\cdot ", title: "Dot \\cdot" },
 	{ label: "≠", insert: "\\neq ", title: "Not equal \\neq" },
+	{ label: "<", insert: " < ", title: "Less than <" },
+	{ label: ">", insert: " > ", title: "Greater than >" },
 	{ label: "≤", insert: "\\leq ", title: "Less or equal \\leq" },
 	{ label: "≥", insert: "\\geq ", title: "Greater or equal \\geq" },
 	{ label: "∞", insert: "\\infty ", title: "Infinity \\infty" },
