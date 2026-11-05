@@ -11,6 +11,7 @@ const MATH_SYMBOLS: Sym[] = [
 	{ label: "Σ↕", insert: ["\\sum_{", "}^{}"], title: "Summation with limits \\sum_{ }^{ }" },
 	{ label: "∫", insert: "\\int ", title: "Integral \\int" },
 	{ label: "√", insert: ["\\sqrt{", "}"], title: "Square root \\sqrt{ }" },
+	{ label: "a⁄b", insert: ["\\frac{", "}{}"], title: "Fraction \\frac{ }{ }" },
 	{ label: "x²", insert: ["^{", "}"], title: "Superscript ^{ }" },
 	{ label: "x₂", insert: ["_{", "}"], title: "Subscript _{ }" },
 	{ label: "×", insert: "\\times ", title: "Times \\times" },

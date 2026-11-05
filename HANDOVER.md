@@ -131,6 +131,10 @@ nicely **and** exports verbatim-correct:
   (reliable everywhere incl. export; `text-decoration` on `<tspan>` was flaky).
   Braces are **invisible grouping** (like LaTeX). Nesting supported.
 - operators: `\cdot`·  `\oplus`⊕  `\lnot`/`\neg`¬  `\lor`/`\vee`∨  `\land`/`\wedge`∧  `\sum`Σ (with inline limits: `\sum_{i=0}^{n}` renders Σ with `i=0` subscript and `n` superscript).
+- fractions: `\frac{a}{b}` renders stacked. SVG text can't do that by itself, so
+  `layoutMathStacks()` (Canvas.tsx) runs after every render: it positions the
+  numerator/denominator via measured `dx`/`dy` and inserts a `.math-frac-bar`
+  `<rect>` after the `<text>`. The same pass aligns multi-line sub/superscripts.
 - `\left` / `\right` are stripped (keep the bracket; drop the invisible `\left.`/`\right.` dot).
 
 Boolean **word auto-convert** (`boolConvert`): `and→\land`, `or→\lor`,
@@ -161,7 +165,7 @@ Modes (keyboard): Select `s`, Node `p`, Connect `c`, Line `l`, Text `t`, Table
 - **Math symbols popup** (Math profile, `src/MathPalette.tsx`): floating palette
   toggled with the `Σ Symbols` button or `m`, dragged by its title bar. Open
   state and position persist in `localStorage`. Three sections: **Math** (Σ, Σ
-  with limits, ∫, √, x², x₂, ×, ÷, ·, ≠, <, >, ≤, ≥, ∞, →, α, β, π, parentheses),
+  with limits, ∫, √, fraction, x², x₂, ×, ÷, ·, ≠, <, >, ≤, ≥, ∞, →, α, β, π, parentheses),
   **Sets** (ℕ ℤ ℚ ℝ ℂ via `\mathbb{}`, ∈, ∉, ⊂, ⊆, ∪, ∩, ∖, ∅, `\{ \}`, `|`)
   and **Logic** (¬, overline, ∧, ∨, ⊕, ⇒, ⇔, ≡, ∀, ∃, ⊤, ⊥); it inserts into
   the focused label field like the inspector palettes.

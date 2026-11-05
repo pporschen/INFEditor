@@ -142,6 +142,10 @@ export function applyLightStyles(root: Element, ls: number) {
 		"stroke-width": "4",
 		"stroke-linejoin": "round",
 	});
+	// fraction bars follow the colour of the text they belong to
+	root.querySelectorAll(".math-frac-bar").forEach((bar) => {
+		bar.setAttribute("fill", bar.previousElementSibling?.getAttribute("fill") ?? LIGHT.ink);
+	});
 }
 
 export function exportPng(svg: SVGSVGElement, filename = "diagram.png", onBlob?: (blob: Blob) => void) {

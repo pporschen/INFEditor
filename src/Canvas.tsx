@@ -21,6 +21,7 @@ function rotTransform(rot: 0 | 90 | 180 | 270 | undefined, cx: number, cy: numbe
 //                    \forall ∀  \exists ∃  \top ⊤  \bot ⊥
 //   sets             \mathbb{N} ℕ  \notin ∉  \subset ⊂  \subseteq ⊆  \cup ∪
 //                    \cap ∩  \setminus ∖  \emptyset ∅  \{ \} literal braces
+//   fractions        \frac{a}{b}  (stacked, see layoutMathStacks)
 // Anything else passes through unchanged.
 const OP: Record<string, string> = {
 	cdot: "·",
@@ -195,7 +196,7 @@ export function renderRich(s: string, compact = false): ReactNode {
 				continue;
 			}
 			const m =
-				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|rightarrow|Leftrightarrow|implies|iff|left|right|neq|equiv|leq|geq|times|div|infty|int|in|alpha|beta|pi|ss|sum|sqrt|forall|exists|top|bot|mathbb|notin|subseteq|subset|cup|cap|emptyset|setminus)/.exec(
+				/^\\(overline|bar|textbf|textit|emph|underline|cdot|oplus|lnot|neg|lor|vee|land|wedge|leftarrow|Leftarrow|Rightarrow|rightarrow|Leftrightarrow|implies|iff|left|right|neq|equiv|leq|geq|times|div|infty|int|in|alpha|beta|pi|ss|sum|sqrt|forall|exists|top|bot|mathbb|notin|subseteq|subset|cup|cap|emptyset|setminus|frac)/.exec(
 					s.slice(i),
 				);
 			if (m) {
@@ -280,6 +281,11 @@ export function renderRich(s: string, compact = false): ReactNode {
 							)}
 						</tspan>,
 					);
+				} else if (cmd === "frac") {
+					const num = readArg();
+					const den = readArg();
+					flush();
+					out.push(renderFrac(num, den, compact, key++));
 				} else if (cmd === "sqrt") {
 					const inner = readArg();
 					flush();
@@ -418,37 +424,114 @@ function renderArgLines(
 	);
 }
 
-// Horizontal layout for `data-mstack` groups (see renderArgLines): every child
-// but the last starts at the first child's left edge; the last (zero-width)
-// child moves the pen to the right edge of the widest one. Inner stacks are
-// laid out first so outer measurements include them. Must run after every
-// render that may change math text.
+// \frac{num}{den}: numerator, denominator (both slightly smaller) and a
+// zero-width tspan that returns the pen to the baseline. All positioning
+// (dx/dy) is done by layoutMathStacks(), which also draws the bar.
+function renderFrac(num: string, den: string, compact: boolean, k: number): ReactNode {
+	return (
+		<tspan key={k} data-mfrac="">
+			<tspan fontSize="0.85em">{renderRich(num, compact)}</tspan>
+			<tspan fontSize="0.85em">{renderRich(den, compact)}</tspan>
+			<tspan>{"​"}</tspan>
+		</tspan>
+	);
+}
+
+function setDx(el: Element, dx: number) {
+	if (Math.abs(dx) > 0.01) el.setAttribute("dx", String(dx));
+	else el.removeAttribute("dx");
+}
+
+// Every child but the last starts at the first child's left edge; the last
+// (zero-width) child moves the pen to the right edge of the widest one.
+// Positions are re-measured after each change: in centred text every dx
+// re-centres the whole line, so only relative positions stay valid.
+function layoutStack(st: Element) {
+	const parts = Array.from(st.children) as SVGTSpanElement[];
+	if (parts.length < 2) return;
+	const items = parts.slice(0, -1);
+	for (const it of items.slice(1)) setDx(it, items[0].getBBox().x - it.getBBox().x);
+	const boxes = items.map((it) => it.getBBox());
+	const right = Math.max(...boxes.map((b) => b.x + b.width));
+	const last = boxes[boxes.length - 1];
+	setDx(parts[parts.length - 1], right - (last.x + last.width));
+}
+
+// Place numerator just above and denominator just below the bar (at the math
+// axis, a quarter em above the baseline), using their measured heights so
+// nested fractions don't collide. Then centre both over the wider one, with a
+// little padding either side, and leave the pen after the fraction.
+function layoutFrac(fr: Element) {
+	const [num, den, restore] = Array.from(fr.children) as SVGTSpanElement[];
+	if (!num || !den || !restore) return;
+	const fs = parseFloat(getComputedStyle(fr).fontSize) || 16;
+
+	for (const p of [num, den, restore]) p.removeAttribute("dy");
+	const baseline = restore.getStartPositionOfChar(0).y;
+	const axis = baseline - 0.25 * fs;
+	const gap = 0.12 * fs;
+	const bn0 = num.getBBox();
+	const upNum = axis - gap - (bn0.y + bn0.height); // shift so num bottom sits above the bar
+	const downDen = axis + gap - den.getBBox().y; // shift so den top sits below the bar
+	num.setAttribute("dy", String(upNum));
+	den.setAttribute("dy", String(downDen - upNum));
+	restore.setAttribute("dy", String(-downDen));
+
+	const pad = 0.15 * fs;
+	const wn = num.getBBox().width;
+	const wd = den.getBBox().width;
+	const w = Math.max(wn, wd);
+	const numDx = pad + (w - wn) / 2;
+	setDx(num, numDx);
+	const left = num.getBBox().x - numDx; // pen position where the fraction starts
+	setDx(den, left + pad + (w - wd) / 2 - den.getBBox().x);
+	const leftNow = num.getBBox().x - numDx;
+	const bd = den.getBBox();
+	setDx(restore, leftNow + w + 2 * pad - (bd.x + bd.width));
+}
+
+// The fraction bar can't live inside <text>, so it is a <rect> inserted right
+// after the text element (same transform), between numerator and denominator.
+function drawFracBar(fr: Element) {
+	const [num, den] = Array.from(fr.children) as SVGTSpanElement[];
+	const text = fr.closest("text");
+	if (!num || !den || !text?.parentNode) return;
+	const bn = num.getBBox();
+	const bd = den.getBBox();
+	const fs = parseFloat(getComputedStyle(fr).fontSize) || 16;
+	const h = Math.max(1, fs * 0.06);
+	const x1 = Math.min(bn.x, bd.x) - fs * 0.08;
+	const x2 = Math.max(bn.x + bn.width, bd.x + bd.width) + fs * 0.08;
+	const y = (bn.y + bn.height + bd.y) / 2;
+	const bar = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+	bar.setAttribute("class", "math-frac-bar");
+	bar.setAttribute("x", String(x1));
+	bar.setAttribute("y", String(y - h / 2));
+	bar.setAttribute("width", String(x2 - x1));
+	bar.setAttribute("height", String(h));
+	const tf = text.getAttribute("transform");
+	if (tf) bar.setAttribute("transform", tf);
+	text.parentNode.insertBefore(bar, text.nextSibling);
+}
+
+// Post-render layout for math that SVG text can't position by itself:
+// `data-mstack` groups (multi-line sub/superscripts, \sum limits, see
+// renderArgLines) and `data-mfrac` fractions. Inner groups are laid out first
+// so outer measurements include them; bars are drawn last, once every dx is
+// final. Must run after every render that may change math text.
 export function layoutMathStacks(root: Element | null) {
 	if (!root) return;
-	const stacks = Array.from(root.querySelectorAll<SVGTSpanElement>("tspan[data-mstack]")).reverse();
-	for (const st of stacks) {
-		const parts = Array.from(st.children) as SVGTSpanElement[];
-		if (parts.length < 2) continue;
-		for (const p of parts) p.removeAttribute("dx");
-		const items = parts.slice(0, -1);
-		const restore = parts[parts.length - 1];
-		try {
-			const b0 = items[0].getBBox();
-			const left = b0.x;
-			let right = b0.x + b0.width;
-			let lastRight = right;
-			for (const it of items.slice(1)) {
-				const b = it.getBBox();
-				const dx = left - b.x;
-				if (Math.abs(dx) > 0.01) it.setAttribute("dx", String(dx));
-				lastRight = left + b.width;
-				right = Math.max(right, lastRight);
-			}
-			const dx = right - lastRight;
-			if (Math.abs(dx) > 0.01) restore.setAttribute("dx", String(dx));
-		} catch {
-			/* getBBox throws when the text is not rendered (e.g. display:none) */
+	root.querySelectorAll(".math-frac-bar").forEach((el) => el.remove());
+	const groups = Array.from(root.querySelectorAll("tspan[data-mstack], tspan[data-mfrac]"));
+	for (const g of groups) for (const c of Array.from(g.children)) c.removeAttribute("dx");
+	try {
+		for (const g of groups.reverse()) {
+			if (g.hasAttribute("data-mfrac")) layoutFrac(g);
+			else layoutStack(g);
 		}
+		for (const g of groups) if (g.hasAttribute("data-mfrac")) drawFracBar(g);
+	} catch {
+		/* getBBox throws when the text is not rendered (e.g. display:none) */
 	}
 }
 

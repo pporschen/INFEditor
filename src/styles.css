@@ -546,6 +546,11 @@ button.active kbd {
   fill: var(--accent-soft);
   pointer-events: none;
 }
+/* \frac bar, drawn next to its <text> by layoutMathStacks */
+.math-frac-bar {
+  fill: var(--ink);
+  pointer-events: none;
+}
 .text-box-border {
   fill: none;
   stroke: var(--ink);
