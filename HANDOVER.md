@@ -130,11 +130,20 @@ nicely **and** exports verbatim-correct:
 - `\overline{}` / `\bar{}` negation — rendered with **combining overline U+0305**
   (reliable everywhere incl. export; `text-decoration` on `<tspan>` was flaky).
   Braces are **invisible grouping** (like LaTeX). Nesting supported.
-- operators: `\cdot`·  `\oplus`⊕  `\lnot`/`\neg`¬  `\lor`/`\vee`∨  `\land`/`\wedge`∧  `\sum`Σ (with inline limits: `\sum_{i=0}^{n}` renders Σ with `i=0` subscript and `n` superscript).
+- operators: `\cdot`·  `\oplus`⊕  `\lnot`/`\neg`¬  `\lor`/`\vee`∨  `\land`/`\wedge`∧  `\sum`Σ.
+  `\sum_{i=0}^{n}` renders display style (big Σ, limits centred above/below);
+  inside a sub/superscript it stays small with side limits.
 - fractions: `\frac{a}{b}` renders stacked. SVG text can't do that by itself, so
   `layoutMathStacks()` (Canvas.tsx) runs after every render: it positions the
   numerator/denominator via measured `dx`/`dy` and inserts a `.math-frac-bar`
-  `<rect>` after the `<text>`. The same pass aligns multi-line sub/superscripts.
+  `<rect>` after the `<text>`. The same pass aligns multi-line sub/superscripts,
+  places display Σ limits, and pushes apart lines of multi-line text that hold
+  fractions/Σ (`data-mline`; boxes behind text blocks grow via `data-mfit`).
+  Derivation rows don't stretch; instead a line with `\frac` or `\sum` limits
+  takes two grid rows (`derivRows`).
+- Every line and math part starts with a zero-width space: SVG takes a
+  character's `dy` from the innermost element, so a leading fraction/Σ would
+  otherwise replace the line's own `dy`.
 - `\left` / `\right` are stripped (keep the bracket; drop the invisible `\left.`/`\right.` dot).
 
 Boolean **word auto-convert** (`boolConvert`): `and→\land`, `or→\lor`,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Canvas, layoutMathStacks, renderLines, splitOnTopLevelBreaks } from "./Canvas";
+import { Canvas, derivRows, layoutMathStacks, renderLines, splitOnTopLevelBreaks } from "./Canvas";
 import type { View } from "./Canvas";
 import { useEditor } from "./store";
 import { exportPng } from "./exportPng";
@@ -552,7 +552,7 @@ export default function App() {
 		const d = doc.derivations.find((x) => x.id === selection.id);
 		if (!d) return;
 		let off = 0;
-		for (let k = 0; k < derivStep; k++) off += splitOnTopLevelBreaks(d.steps[k].expr).lines.length;
+		for (let k = 0; k < derivStep; k++) off += derivRows(d.steps[k].expr);
 		const lineY = (d.y + off + 0.5) * GRID;
 		setView((v) => {
 			const h = v.w * aspect;
@@ -1414,7 +1414,7 @@ export default function App() {
 				if (image) include(image.x, image.y, image.x + image.w, image.y + image.h);
 			} else if (ref.kind === "deriv") {
 				const deriv = doc.derivations.find((item) => item.id === ref.id);
-				if (deriv) include(deriv.x, deriv.y, deriv.x + deriv.exprW + 7, deriv.y + deriv.steps.length);
+				if (deriv) include(deriv.x, deriv.y, deriv.x + deriv.exprW + 7, deriv.y + deriv.steps.reduce((n, st) => n + derivRows(st.expr), 0));
 			}
 		}
 		return Number.isFinite(minX) ? { x: (minX + maxX) / 2, y: (minY + maxY) / 2 } : null;

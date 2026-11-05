@@ -107,6 +107,10 @@ const BINARY_OPS = new Set([
 const MATH_SPACE = "\u2002";
 // sub/superscripts use a thin space instead, and never two in a row
 const COMPACT_SPACE = "\u2009";
+// leading anchor for lines and math parts: SVG takes a character's dy from
+// the innermost element, so without it a dy on a leading fraction or Σ would
+// replace the dy of the line/part that contains it
+const ZWSP = "​";
 
 // LaTeX diaeresis accent (\"a, \"{o}, …) → the precomposed umlaut for display,
 // while the source stays pure LaTeX for export. Falls back to a combining mark.
@@ -250,6 +254,30 @@ export function renderRich(s: string, compact = false): ReactNode {
 						else upper = arg;
 					}
 					const sumKey = key++;
+					if (!compact) {
+						// display style: big Σ with limits centred above/below it
+						// (positioned by layoutMathStacks)
+						out.push(
+							<tspan key={sumKey} data-msum="">
+								<tspan fontSize="1.5em">{OP.sum}</tspan>
+								{upper && (
+									<tspan data-lim="up" fontSize="0.7em">
+										{ZWSP}
+										{renderArgLines(upper, key++, "sub")}
+									</tspan>
+								)}
+								{lower && (
+									<tspan data-lim="lo" fontSize="0.7em">
+										{ZWSP}
+										{renderArgLines(lower, key++, "sub")}
+									</tspan>
+								)}
+								<tspan>{"​"}</tspan>
+							</tspan>,
+						);
+						continue;
+					}
+					// inside sub/superscripts: small Σ with side limits
 					const limits: ReactNode[] = [];
 					if (upper) {
 						const upperKey = key++;
@@ -413,7 +441,8 @@ function renderArgLines(
 	return (
 		<tspan data-mstack="">
 			{lines.map((ln, i) => (
-				<tspan key={`${baseKey}-${i}`} dy={i === 0 ? firstDy : lineHeight}>
+				<tspan key={`${baseKey}-${i}`} dy={i === 0 ? firstDy || undefined : lineHeight}>
+					{ZWSP}
 					{renderRich(ln.trim(), true)}
 				</tspan>
 			))}
@@ -430,8 +459,8 @@ function renderArgLines(
 function renderFrac(num: string, den: string, compact: boolean, k: number): ReactNode {
 	return (
 		<tspan key={k} data-mfrac="">
-			<tspan fontSize="0.85em">{renderRich(num, compact)}</tspan>
-			<tspan fontSize="0.85em">{renderRich(den, compact)}</tspan>
+			<tspan fontSize="0.85em">{ZWSP}{renderRich(num, compact)}</tspan>
+			<tspan fontSize="0.85em">{ZWSP}{renderRich(den, compact)}</tspan>
 			<tspan>{"​"}</tspan>
 		</tspan>
 	);
@@ -467,8 +496,7 @@ function layoutFrac(fr: Element) {
 	const fs = parseFloat(getComputedStyle(fr).fontSize) || 16;
 
 	for (const p of [num, den, restore]) p.removeAttribute("dy");
-	const baseline = restore.getStartPositionOfChar(0).y;
-	const axis = baseline - 0.25 * fs;
+	const axis = mathAxis(restore, fs);
 	const gap = 0.12 * fs;
 	const bn0 = num.getBBox();
 	const upNum = axis - gap - (bn0.y + bn0.height); // shift so num bottom sits above the bar
@@ -476,18 +504,105 @@ function layoutFrac(fr: Element) {
 	num.setAttribute("dy", String(upNum));
 	den.setAttribute("dy", String(downDen - upNum));
 	restore.setAttribute("dy", String(-downDen));
+	centerColumn([num, den], restore, 0.15 * fs);
+}
 
-	const pad = 0.15 * fs;
-	const wn = num.getBBox().width;
-	const wd = den.getBBox().width;
-	const w = Math.max(wn, wd);
-	const numDx = pad + (w - wn) / 2;
-	setDx(num, numDx);
-	const left = num.getBBox().x - numDx; // pen position where the fraction starts
-	setDx(den, left + pad + (w - wd) / 2 - den.getBBox().x);
-	const leftNow = num.getBBox().x - numDx;
-	const bd = den.getBBox();
-	setDx(restore, leftNow + w + 2 * pad - (bd.x + bd.width));
+// Height of the math axis (where fraction bars sit) on the line the pen is
+// on, from the glyph cell of a zero-width character: a little below the
+// cell's middle. Unlike the start position this works for any
+// dominant-baseline (labels are central, text blocks hanging).
+function mathAxis(pen: SVGTSpanElement, fs: number): number {
+	const cell = pen.getExtentOfChar(0);
+	return cell.y + cell.height / 2 + 0.1 * fs;
+}
+
+// Centre `parts` (already moved vertically) in one column as wide as the
+// widest, with `pad` either side, and move the pen (`restore`, the zero-width
+// tspan after the last part) to the column's right edge. Measured relative to
+// the first part, since in centred text every dx re-centres the whole line.
+function centerColumn(parts: SVGTSpanElement[], restore: SVGTSpanElement, pad: number) {
+	const widths = parts.map((p) => p.getBBox().width);
+	const w = Math.max(...widths);
+	const firstDx = pad + (w - widths[0]) / 2;
+	setDx(parts[0], firstDx);
+	const left = () => parts[0].getBBox().x - firstDx; // pen position where the column starts
+	for (let i = 1; i < parts.length; i++) setDx(parts[i], left() + pad + (w - widths[i]) / 2 - parts[i].getBBox().x);
+	const lb = parts[parts.length - 1].getBBox();
+	setDx(restore, left() + w + 2 * pad - (lb.x + lb.width));
+}
+
+// Display-style \sum: centre the big Σ on the math axis, put the upper limit
+// just above it and the lower limit just below, all centred in one column.
+function layoutSum(g: Element) {
+	const kids = Array.from(g.children) as SVGTSpanElement[];
+	const op = kids[0];
+	const restore = kids[kids.length - 1];
+	const up = kids.find((k) => k.getAttribute("data-lim") === "up");
+	const lo = kids.find((k) => k.getAttribute("data-lim") === "lo");
+	if (!op || kids.length < 2) return;
+	const fs = parseFloat(getComputedStyle(g).fontSize) || 16;
+
+	for (const k of kids) k.removeAttribute("dy");
+	const axis = mathAxis(restore, fs);
+	const gap = 0.08 * fs;
+	let total = 0;
+	const shift = (el: Element, d: number) => {
+		el.setAttribute("dy", String(d));
+		total += d;
+	};
+	const ob0 = op.getBBox();
+	shift(op, axis - (ob0.y + ob0.height / 2));
+	const ob = op.getBBox();
+	if (up) {
+		const b = up.getBBox();
+		shift(up, ob.y - gap - (b.y + b.height));
+	}
+	if (lo) {
+		const b = lo.getBBox();
+		shift(lo, ob.y + ob.height + gap - b.y);
+	}
+	restore.setAttribute("dy", String(-total));
+	centerColumn([op, up, lo].filter((p): p is SVGTSpanElement => !!p), restore, 0.1 * fs);
+}
+
+// Lines of a multi-line label (renderLines / text blocks carry their base dy
+// in `data-mline`): push a line down when tall math on the line above (or on
+// itself) would otherwise overlap. Lines of plain text keep their spacing.
+// Vertically centred blocks are re-centred.
+function spaceLines(text: Element) {
+	const lines = Array.from(text.children).filter((c) => c.hasAttribute("data-mline")) as SVGTSpanElement[];
+	if (lines.length < 2) return;
+	const fs = parseFloat(getComputedStyle(text).fontSize) || 16;
+	const px = (v: string) => (v.trim().endsWith("em") ? parseFloat(v) * fs : parseFloat(v) || 0);
+	for (const ln of lines) ln.setAttribute("dy", ln.getAttribute("data-mline")!);
+	let extra = 0;
+	const tall = lines.map((ln) => !!ln.querySelector("[data-mfrac], [data-msum], [data-mstack]"));
+	for (let i = 1; i < lines.length; i++) {
+		if (!tall[i - 1] && !tall[i]) continue;
+		const prev = lines[i - 1].getBBox();
+		const need = prev.y + prev.height + 0.2 * fs - lines[i].getBBox().y;
+		if (need > 0.5) {
+			lines[i].setAttribute("dy", String(px(lines[i].getAttribute("data-mline")!) + need));
+			extra += need;
+		}
+	}
+	if (extra && lines[0].hasAttribute("data-mcenter"))
+		lines[0].setAttribute("dy", String(px(lines[0].getAttribute("data-mline")!) - extra / 2));
+}
+
+// Grow a box drawn behind a text (`data-mfit`, original geometry in data-y /
+// data-h) so it still encloses the text after spaceLines made it taller.
+function fitBox(rect: Element) {
+	let text = rect.nextElementSibling;
+	while (text && text.tagName !== "text") text = text.nextElementSibling;
+	if (!text) return;
+	const y0 = Number(rect.getAttribute("data-y"));
+	const h0 = Number(rect.getAttribute("data-h"));
+	const bb = (text as SVGTextElement).getBBox();
+	const top = Math.min(y0, bb.y - 6);
+	const bottom = Math.max(y0 + h0, bb.y + bb.height + 6);
+	rect.setAttribute("y", String(top));
+	rect.setAttribute("height", String(bottom - top));
 }
 
 // The fraction bar can't live inside <text>, so it is a <rect> inserted right
@@ -522,17 +637,32 @@ function drawFracBar(fr: Element) {
 export function layoutMathStacks(root: Element | null) {
 	if (!root) return;
 	root.querySelectorAll(".math-frac-bar").forEach((el) => el.remove());
-	const groups = Array.from(root.querySelectorAll("tspan[data-mstack], tspan[data-mfrac]"));
+	const groups = Array.from(root.querySelectorAll("tspan[data-mstack], tspan[data-mfrac], tspan[data-msum]"));
 	for (const g of groups) for (const c of Array.from(g.children)) c.removeAttribute("dx");
 	try {
 		for (const g of groups.reverse()) {
 			if (g.hasAttribute("data-mfrac")) layoutFrac(g);
+			else if (g.hasAttribute("data-msum")) layoutSum(g);
 			else layoutStack(g);
 		}
+		// derivation rows have fixed grid heights; their lines stay on the grid
+		const texts = new Set(Array.from(root.querySelectorAll("tspan[data-mline]"), (l) => l.parentElement));
+		for (const t of texts) if (t && !t.classList.contains("deriv-expr")) spaceLines(t);
+		root.querySelectorAll("rect[data-mfit]").forEach(fitBox);
 		for (const g of groups) if (g.hasAttribute("data-mfrac")) drawFracBar(g);
 	} catch {
 		/* getBBox throws when the text is not rendered (e.g. display:none) */
 	}
+}
+
+// Grid rows a derivation expression line needs: fractions and \sum with
+// limits are about twice as tall as plain text, so they get two rows.
+export function derivLineRows(line: string): number {
+	return /\\frac|\\sum\s*[_^]/.test(line) ? 2 : 1;
+}
+
+export function derivRows(expr: string): number {
+	return splitOnTopLevelBreaks(expr).lines.reduce((n, ln) => n + derivLineRows(ln), 0);
 }
 
 // Render text that may contain `\\` (LaTeX-style) or real newlines as stacked
@@ -542,14 +672,15 @@ type LineClick = (e: React.MouseEvent<SVGTSpanElement>, lineIndex: number, srcOf
 export function renderLines(
 	s: string,
 	x: number,
-	lineHeight: number | string = "1.6em",
+	// a function gives the dy of line i (> 0) from its source
+	lineHeight: number | string | ((line: string, prev: string) => number) = "1.6em",
 	onLineClick?: LineClick,
 	centerBlock = false,
 ): ReactNode {
 	const { lines, offsets } = splitOnTopLevelBreaks(s);
 	if (lines.length === 1 && !onLineClick) return renderRich(s);
 	let firstDy: number | string = 0;
-	if (centerBlock && lines.length > 1) {
+	if (centerBlock && lines.length > 1 && typeof lineHeight !== "function") {
 		if (typeof lineHeight === "number") {
 			firstDy = -((lines.length - 1) * lineHeight) / 2;
 		} else {
@@ -561,13 +692,18 @@ export function renderLines(
 			}
 		}
 	}
+	const dyOf = (i: number) =>
+		i === 0 ? firstDy : typeof lineHeight === "function" ? lineHeight(lines[i], lines[i - 1]) : lineHeight;
 	return lines.map((ln, i) => (
 		<tspan
 			key={i}
 			x={x}
-			dy={i === 0 ? firstDy : lineHeight}
+			dy={dyOf(i)}
+			data-mline={String(dyOf(i))}
+			data-mcenter={centerBlock && i === 0 ? "" : undefined}
 			onClick={onLineClick ? (e) => onLineClick(e, i, offsets[i], ln) : undefined}
 		>
+			{ZWSP}
 			{renderRich(ln.trim())}
 		</tspan>
 	));
@@ -1450,13 +1586,12 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 						const relX = (d.x + 0.5) * GRID;
 						const exprX = (d.x + 1) * GRID;
 						const reasonX = (d.x + 1 + d.exprW) * GRID;
-						// each step is as tall as its expression's line count; steps stack
-						const lineCount = (s: string) => splitOnTopLevelBreaks(s).lines.length;
+						// each step is as tall as its expression's rows (see derivRows); steps stack
 						const offsets: number[] = [];
 						let acc = 0;
 						for (const st of d.steps) {
 							offsets.push(acc);
-							acc += lineCount(st.expr);
+							acc += derivRows(st.expr);
 						}
 						const totalRows = acc;
 						const derivCx = (d.x + (1 + d.exprW + 6) / 2) * GRID;
@@ -1476,8 +1611,8 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 								)}
 								{d.steps.map((st, i) => {
 									const top = d.y + offsets[i];
-									const rowH = lineCount(st.expr);
-									const cy = (top + 0.5) * GRID;
+									const rowH = derivRows(st.expr);
+									const cy = (top + derivLineRows(splitOnTopLevelBreaks(st.expr).lines[0]) / 2) * GRID;
 									const rowSel = dsel && derivStep === i;
 									return (
 										<g key={i} {...hitProps} onClick={() => onDerivRowClick(d.id, i)}>
@@ -1502,7 +1637,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 												{renderLines(
 													st.expr,
 													exprX,
-													GRID,
+													(ln, prev) => ((derivLineRows(prev) + derivLineRows(ln)) / 2) * GRID,
 													mode === "select"
 														? (e, _li, srcOffset, rawLine) => {
 																e.stopPropagation();
@@ -1585,6 +1720,9 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 											y={py - 6}
 											width={maxW + 16}
 											height={boxH}
+											data-mfit=""
+											data-y={py - 6}
+											data-h={boxH}
 											rx={6}
 										/>
 									)}
@@ -1595,6 +1733,9 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 											y={py - 6}
 											width={maxW + 16}
 											height={boxH}
+											data-mfit=""
+											data-y={py - 6}
+											data-h={boxH}
 											rx={2}
 										/>
 									)}
@@ -1612,6 +1753,7 @@ export const Canvas = forwardRef<SVGSVGElement, Props>(function Canvas(
 												key={i}
 												x={px}
 												dy={i === 0 ? 0 : "1.35em"}
+												data-mline={i === 0 ? "0" : "1.35em"}
 												style={{ cursor: mode === "select" ? "text" : undefined }}
 												onClick={(e) => {
 													if (mode !== "select") {
