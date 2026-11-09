@@ -6,6 +6,7 @@ import { exportPng } from "./exportPng";
 import { printA4 } from "./printA4";
 import { GATES, GATE_ORDER } from "./gates";
 import { MathPalette } from "./MathPalette";
+import { onBraceTab } from "./braceTab";
 import { GRID, W, H, PAGE_W, PAGE_H, PAGE_MARGIN, pageTop, halfExtents } from "./geometry";
 import { tableToLatex, derivToLatex } from "./latex";
 import { kvHeaderRow, kvHeaderCol } from "./kv";
@@ -1854,6 +1855,12 @@ export default function App() {
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, [changeMode, dispatch, profile, selection, selectedImageAnnotationId, selectedTable]);
+
+	// Tab in any text field jumps through formula {…} groups (see braceTab.ts)
+	useEffect(() => {
+		window.addEventListener("keydown", onBraceTab, true);
+		return () => window.removeEventListener("keydown", onBraceTab, true);
+	}, []);
 
 	return (
 		<div className="app">
